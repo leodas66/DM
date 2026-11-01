@@ -8,6 +8,8 @@
 /ui/dist/
 /internal/web/dist/
 /internal/gui/wails/frontend/dist/
+/internal/gui/wails/frontend/node_modules/
+/internal/gui/wails/frontend/package-lock.json
 /extension/node_modules/
 /extension/dist/
 /extension/web-ext-artifacts/
