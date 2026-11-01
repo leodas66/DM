@@ -22,32 +22,32 @@ Torrents, FTP, HLS/DASH stream merging, cloud sync, multi-user.
 - Packaging: PKGBUILD + systemd user service
 
 ## 4. Architecture
-```
-Browser extension --\
-                     >-- HTTP/WS (127.0.0.1 + token) --> Daemon
-Svelte UI (browser) -/                                    |- API layer
-                                                          |- Manager (queue, state owner)
-                                                          |- Downloader (probe, segments, writer)
-                                                          |- Store (SQLite)
+```text
+CLIENTS
+  GTK4 desktop ----------- HTTP REST + WebSocket -----------+
+  CLI -------------------- HTTP REST / daemon commands -----+--> GO DAEMON
+  Browser extension                                        |
+       | Native Messaging                                  |
+       v                                                   |
+  dm-native-host ---------------- authenticated HTTP ------+
+                                                            |
+GO DAEMON                                                    |
+  API layer                                                  |
+       |                                                     |
+  Application services                                       |
+       |                                                     |
+  Manager (queue, scheduler, lifecycle; sole state owner)   |
+       |                                                     |
+  Download engine (probe, segments, retry, writer)          |
+       |                                                     |
+  SQLite persistence <---------------------------------------+
 ```
 
-Key rule: the Manager owns all download state. Segment workers never touch shared state; they send progress/events over channels to the Manager. No shared mutable structs behind mutexes across goroutines.
-
-### Suggested layout
-```
-cmd/dm/main.go
-internal/model/      core types
-internal/probe/      HEAD/range probing, filename detection
-internal/download/   segment workers, writer, retry
-internal/manager/    queue, state machine, event bus
-internal/store/      SQLite persistence
-internal/api/        REST + WebSocket + auth
-internal/app/        application services between API and Manager
-internal/web/        legacy embedded UI server (remove after migration)
-extension/           TypeScript WebExtension + Native Messaging client
-cmd/dm-native-host/  browser native messaging host
-desktop/             isolated GTK4 desktop client Go module
-```
+The Manager owns all download state and is the only writer to the store.
+Segment workers never touch shared state; they report progress/events over
+channels. Application services own use-case orchestration, not download state.
+The GTK client and native host are separate clients; neither imports the
+Manager or opens SQLite.
 
 ### Core types (define and review first)
 - `Download`: ID, URL, FinalURL, Filename, Dir, Size, AcceptsRanges, ETag, LastModified, Status, Segments, Headers, Cookies, Referrer, CreatedAt, Error
