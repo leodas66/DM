@@ -29,9 +29,8 @@ next report. Never silently take a permanent decision.
 Stop and ask only when the answer changes something irreversible or
 product-level:
 
-1. A dependency outside the pre-approved list (`modernc.org/sqlite` at Phase 2,
-   Svelte/Vite in `ui/`, esbuild in `extension/`).
-2. The project license, or vendoring anything copyleft.
+1. A dependency outside the pre-approved list (`modernc.org/sqlite`, `github.com/diamondburned/gotk4/pkg` v0.4.1 in `desktop/`, esbuild in `extension/`).
+2. The project license, or vendoring anything copyleft. The gotk4 generated `pkg` module is MPL-2.0; do not depend on its AGPL-3.0 generator module.
 3. Destroying data: deleting user files, rewriting history, dropping the DB
    schema without a migration.
 4. The two review gates PLAN §8 assigns to the author (model types, Manager

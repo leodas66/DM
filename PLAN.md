@@ -6,7 +6,7 @@ Project name: TBD
 - Tiny always-on daemon (target: under 20 MB RSS idle).
 - Fast segmented downloads with reliable pause, resume and crash recovery.
 - Browser extension (Chrome + Firefox) that captures downloads.
-- Simple, light web UI. Costs nothing when the tab is closed.
+- Native GTK4 desktop UI; no embedded browser or standalone web frontend.
 - Single binary, easy to package on Arch (PKGBUILD + systemd user service).
 
 ## 2. Non-goals (v1)
@@ -16,8 +16,8 @@ Torrents, FTP, HLS/DASH stream merging, cloud sync, multi-user.
 - Engine: Go, standard `net/http`, goroutine per segment
 - State: SQLite via `modernc.org/sqlite` (pure Go, no CGO)
 - API: REST (stdlib mux or chi) + WebSocket for live progress
-- UI: Svelte + Vite (no SvelteKit), built to static files, embedded with `go:embed`
-- Extension: TypeScript WebExtension (Manifest V3, Chrome + Firefox)
+- Desktop UI: GTK4 with Go bindings (`github.com/diamondburned/gotk4/pkg`), isolated in `desktop/` as a separate Go module
+- Extension: TypeScript WebExtension (Manifest V3, Chrome + Firefox) using Native Messaging to a Go host
 - Logging: `log/slog`; CLI/config: flags or cobra
 - Packaging: PKGBUILD + systemd user service
 
@@ -42,9 +42,11 @@ internal/download/   segment workers, writer, retry
 internal/manager/    queue, state machine, event bus
 internal/store/      SQLite persistence
 internal/api/        REST + WebSocket + auth
-internal/web/        embedded UI assets
-extension/           TypeScript WebExtension
-ui/                  Svelte app
+internal/app/        application services between API and Manager
+internal/web/        legacy embedded UI server (remove after migration)
+extension/           TypeScript WebExtension + Native Messaging client
+cmd/dm-native-host/  browser native messaging host
+ desktop/            isolated GTK4 desktop client Go module
 ```
 
 ### Core types (define and review first)
@@ -162,7 +164,7 @@ Prompt:
 Implement internal/api exposing the REST endpoints and WebSocket event stream from SPEC.md section 5. Bind to 127.0.0.1 only. Require a bearer token (generate on first run, store in the user config dir with mode 0600). Check the Origin header against an allowlist. Broadcast Manager events to all WebSocket clients. Add graceful shutdown that pauses running downloads and persists state. Write handler tests with httptest, including auth failures. Run go vet and go test -race ./... until clean.
 ```
 
-### Phase 4: Browser extension
+### Phase 4: Browser extension (legacy transport; migration planned)
 Requirements:
 - Intercept downloads (`downloads` API), send URL, referrer, headers, cookies to the daemon.
 - Cancel the browser's own download only after the daemon accepts it.
@@ -176,9 +178,11 @@ Prompt:
 Create a TypeScript WebExtension (Manifest V3, works on Chrome and Firefox) in extension/. It listens to downloads.onCreated, cancels the browser download only after POST /api/downloads to the local daemon succeeds (sending url, referrer, cookies for the URL, and relevant headers), and falls back to the browser's own download if the daemon is unreachable. Add a context menu "Download with DM", an options page for port and token, and a minimum-size filter. Use a small build setup (esbuild). Include a README with load-unpacked steps for both browsers.
 ```
 
-### Phase 5: Svelte UI
-Requirements: list with progress, speed, ETA; add-URL dialog; pause/resume/cancel/remove; settings (dir, connections, speed limit, concurrency); live updates over WebSocket; dark/light via CSS variables; no UI component library.
-Done when: built bundle is under about 100 KB gzipped and embedded in the Go binary.
+### Phase 5: Legacy Svelte UI (implemented; scheduled for removal)
+The Svelte UI was an intermediate client. It will be replaced by the native GTK4
+client described in `docs/ARCHITECTURE.md`; do not add new features to `ui/` or
+the Wails frontend. Delete the legacy web assets only after GTK parity and
+packaging checks pass.
 
 Prompt:
 ```
@@ -187,8 +191,20 @@ Create a Svelte + Vite app (no SvelteKit, no component library) in ui/. Features
 
 ### Phase 6: Extras
 - Categories with default folders, scheduler, clipboard link detection, yt-dlp integration for video sites.
-- Tray icon that opens `chromium --app=http://127.0.0.1:PORT`.
-- PKGBUILD + systemd user service.
+- Tray integration and PKGBUILD + systemd user service.
+
+## 10. Approved architecture migration
+See `docs/ARCHITECTURE.md` for the authoritative target architecture and staged
+migration. The approved work is:
+1. Add application services between API handlers and Manager.
+2. Add a Go Native Messaging host; the browser extension must not call the
+   loopback API directly. The host forwards accepted requests to the existing
+   authenticated daemon API.
+3. Build a native GTK4 desktop client in the separate `desktop/` Go module.
+   Keep GTK/cgo dependencies out of the daemon module and its normal CI gate.
+4. After native feature parity, remove `ui/`, `internal/web/`, Wails and all
+   Svelte/Vite artifacts. Keep REST/WebSocket for native desktop, native host
+   and future clients.
 
 ## 8. Rules for working with the AI tool
 1. One phase per session; paste the relevant section and prompt only.
