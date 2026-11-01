@@ -6,6 +6,7 @@
 # UI and extension
 /ui/node_modules/
 /ui/dist/
+/internal/web/dist/
 /extension/node_modules/
 /extension/dist/
 /extension/web-ext-artifacts/

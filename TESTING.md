@@ -98,3 +98,6 @@ Record any check skipped, with the reason and the phase it was moved to.
 | 4 | Cookie-protected download, Firefox | No Firefox available in this environment; verify manually with a temporary add-on |
 | 4 | Daemon stopped → browser proceeds | Same; manual browser check |
 | 4 | Below minimum-size filter | Same; manual browser check |
+| 5 | Live progress with tab open | Requires a running browser; verify manually |
+| 5 | Tab closed → daemon RSS under 20 MB idle | Requires a running browser; verify manually |
+| 5 | Dark/light both readable | Requires a running browser; verify manually |
