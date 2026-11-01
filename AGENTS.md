@@ -53,8 +53,9 @@ non-obvious call already made — check it before re-litigating a choice.
 - Never copy or translate code from GPL sources (aria2, Gopeed, XDM, old FDM)
   into this repo — that would relicense the project.
 - Do not decompile FDM 5.0+; observe behaviour only.
-- This project's license is undecided; ask before adding one or vendoring
-  anything copyleft.
+- This project is MIT-licensed (D013). Check each dependency's actual module
+  license; the gotk4 generated `pkg` module is MPL-2.0, while its generator is
+  AGPL-3.0 and must not be imported.
 
 ## Layout
 `cmd/dm` and `cmd/dm-native-host` are Go executables. Core packages live in

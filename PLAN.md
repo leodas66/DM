@@ -7,7 +7,7 @@ Project name: TBD
 - Fast segmented downloads with reliable pause, resume and crash recovery.
 - Browser extension (Chrome + Firefox) that captures downloads.
 - Native GTK4 desktop UI; no embedded browser or standalone web frontend.
-- Single binary, easy to package on Arch (PKGBUILD + systemd user service).
+- Small daemon binary, independently packaged native desktop client and native messaging host; easy to package on Arch (PKGBUILD + systemd user service).
 
 ## 2. Non-goals (v1)
 Torrents, FTP, HLS/DASH stream merging, cloud sync, multi-user.
@@ -46,7 +46,7 @@ internal/app/        application services between API and Manager
 internal/web/        legacy embedded UI server (remove after migration)
 extension/           TypeScript WebExtension + Native Messaging client
 cmd/dm-native-host/  browser native messaging host
- desktop/            isolated GTK4 desktop client Go module
+desktop/             isolated GTK4 desktop client Go module
 ```
 
 ### Core types (define and review first)
@@ -164,30 +164,31 @@ Prompt:
 Implement internal/api exposing the REST endpoints and WebSocket event stream from SPEC.md section 5. Bind to 127.0.0.1 only. Require a bearer token (generate on first run, store in the user config dir with mode 0600). Check the Origin header against an allowlist. Broadcast Manager events to all WebSocket clients. Add graceful shutdown that pauses running downloads and persists state. Write handler tests with httptest, including auth failures. Run go vet and go test -race ./... until clean.
 ```
 
-### Phase 4: Browser extension (legacy transport; migration planned)
-Requirements:
-- Intercept downloads (`downloads` API), send URL, referrer, headers, cookies to the daemon.
-- Cancel the browser's own download only after the daemon accepts it.
-- Context menu "Download with DM"; popup to paste URL.
-- If the daemon is unreachable, let the browser download normally.
-- Settings: daemon port, token, minimum file size to capture, extension allow/deny list.
-Done when: a logged-in download (cookie-protected) works on both Chrome and Firefox.
+### Phase 4: Browser extension (legacy implementation; Native Messaging migration approved)
 
-Prompt:
-```
-Create a TypeScript WebExtension (Manifest V3, works on Chrome and Firefox) in extension/. It listens to downloads.onCreated, cancels the browser download only after POST /api/downloads to the local daemon succeeds (sending url, referrer, cookies for the URL, and relevant headers), and falls back to the browser's own download if the daemon is unreachable. Add a context menu "Download with DM", an options page for port and token, and a minimum-size filter. Use a small build setup (esbuild). Include a README with load-unpacked steps for both browsers.
-```
+The existing extension currently calls loopback HTTP directly. This is historical
+implementation only. The approved target is Native Messaging via
+`cmd/dm-native-host`; see `docs/ARCHITECTURE.md`.
+
+Migration requirements:
+- Extension communicates with the native host using the browser Native Messaging
+  protocol; it must not call the daemon's HTTP API directly.
+- Host forwards validated requests to the daemon's authenticated REST API.
+- Preserve URL, referrer, relevant headers and cookies for authenticated downloads.
+- Cancel the browser download only after the host confirms daemon acceptance.
+- If the host or daemon is unavailable, leave the browser's download alone.
+- Install Chrome and Firefox host manifests with explicit extension-ID allowlists.
+- Host stdout carries only framed protocol messages; diagnostics go to stderr.
+
+Done when: cookie-protected downloads work in Chrome and Firefox, daemon-down
+fallback works, and malformed/oversized native messages are rejected.
 
 ### Phase 5: Legacy Svelte UI (implemented; scheduled for removal)
-The Svelte UI was an intermediate client. It will be replaced by the native GTK4
-client described in `docs/ARCHITECTURE.md`; do not add new features to `ui/` or
-the Wails frontend. Delete the legacy web assets only after GTK parity and
-packaging checks pass.
 
-Prompt:
-```
-Create a Svelte + Vite app (no SvelteKit, no component library) in ui/. Features: download list with progress bar, speed, ETA and status; add-URL dialog; pause/resume/cancel/remove actions; settings page; live updates via the WebSocket at /api/ws; token read from the URL fragment on first load and kept in memory/localStorage. Plain CSS with variables for dark/light. Output static files that internal/web embeds using go:embed and serves at /. Keep the gzipped bundle small and report its size.
-```
+The Svelte and Wails frontends are transitional. Do not add features to them.
+The GTK4 desktop client in `desktop/` replaces both. Remove all Svelte/Vite
+sources, Wails frontend/backend glue and `internal/web` only after GTK feature
+parity, packaging and test checks pass. See `docs/ARCHITECTURE.md`.
 
 ### Phase 6: Extras
 - Categories with default folders, scheduler, clipboard link detection, yt-dlp integration for video sites.
