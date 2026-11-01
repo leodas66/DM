@@ -777,6 +777,47 @@ func TestCategoriesAddRequiresName(t *testing.T) {
 	}
 }
 
+// ---- Scheduler API tests ----
+
+func TestDownloadStartAt(t *testing.T) {
+	h := newHarness(t, "secret-token")
+	defer h.close()
+
+	start := time.Now().Add(10 * time.Second).Format(time.RFC3339)
+	resp, err := h.restReq(http.MethodPost, "/api/downloads", "secret-token", addRequest{
+		URL:     "https://example.com/file.bin",
+		StartAt: start,
+	})
+	if err != nil {
+		t.Fatalf("add request: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusCreated {
+		b, _ := io.ReadAll(resp.Body)
+		t.Fatalf("add failed: %s %s", resp.Status, string(b))
+	}
+	var d model.Download
+	if err := json.NewDecoder(resp.Body).Decode(&d); err != nil {
+		t.Fatalf("decode add: %v", err)
+	}
+	if d.Status != model.StatusScheduled {
+		t.Fatalf("status = %s, want %s", d.Status, model.StatusScheduled)
+	}
+
+	// Invalid startAt.
+	resp, err = h.restReq(http.MethodPost, "/api/downloads", "secret-token", addRequest{
+		URL:     "https://example.com/file2.bin",
+		StartAt: "not-a-time",
+	})
+	if err != nil {
+		t.Fatalf("add request: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("expected 400 for invalid startAt, got %s", resp.Status)
+	}
+}
+
 func TestCategoryDefaultDirAppliedToDownload(t *testing.T) {
 	h := newHarness(t, "secret-token")
 	defer h.close()

@@ -290,3 +290,22 @@ func TestDownloadCategoryIDRoundTrip(t *testing.T) {
 		t.Fatalf("CategoryID = %q, want %q", got.CategoryID, "c1")
 	}
 }
+
+func TestDownloadStartAtRoundTrip(t *testing.T) {
+	s := openTemp(t)
+	d := sample("d1")
+	d.StartAt = time.Date(2026, 11, 1, 15, 0, 0, 0, time.UTC)
+	if err := s.Save(context.Background(), d); err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.Get(context.Background(), "d1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !got.StartAt.Equal(d.StartAt) {
+		t.Fatalf("StartAt = %v, want %v", got.StartAt, d.StartAt)
+	}
+	if got.Status != model.StatusPaused {
+		t.Fatalf("Status = %s, want %s", got.Status, model.StatusPaused)
+	}
+}

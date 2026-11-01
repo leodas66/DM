@@ -735,3 +735,189 @@ func TestKillNineAndResume(t *testing.T) {
 	}
 	wantChecksum(t, filepath.Join(outDir, done.Filename), body)
 }
+
+func TestScheduledDownloadStaysScheduled(t *testing.T) {
+	h := newHarness(t, Settings{MaxConcurrent: 1, Connections: 2})
+
+	start := time.Now().Add(10 * time.Second)
+	d, err := h.m.Add(context.Background(), AddRequest{
+		URL:     "https://example.com/file.bin",
+		StartAt: start,
+	})
+	if err != nil {
+		t.Fatalf("Add: %v", err)
+	}
+	if d.Status != model.StatusScheduled {
+		t.Fatalf("status = %s, want %s", d.Status, model.StatusScheduled)
+	}
+
+	// It should not be in the queue.
+	got, err := h.m.Get(context.Background(), d.ID)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if got.Status != model.StatusScheduled {
+		t.Fatalf("Get status = %s, want %s", got.Status, model.StatusScheduled)
+	}
+
+	// Pump manually and verify it's still scheduled (start time hasn't arrived).
+	h.m.pump()
+	got, err = h.m.Get(context.Background(), d.ID)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if got.Status != model.StatusScheduled {
+		t.Fatalf("after pump status = %s, want %s", got.Status, model.StatusScheduled)
+	}
+}
+
+func TestScheduledDownloadPromotedOnTime(t *testing.T) {
+	h := newHarness(t, Settings{MaxConcurrent: 1, Connections: 2})
+
+	start := time.Now().Add(50 * time.Millisecond)
+	d, err := h.m.Add(context.Background(), AddRequest{
+		URL:     "https://example.com/file.bin",
+		StartAt: start,
+	})
+	if err != nil {
+		t.Fatalf("Add: %v", err)
+	}
+	if d.Status != model.StatusScheduled {
+		t.Fatalf("status = %s, want %s", d.Status, model.StatusScheduled)
+	}
+
+	// Wait for the pump to promote it to queued (and then probing since a probe
+	// will start once it's running). Give it a generous deadline.
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		got, err := h.m.Get(context.Background(), d.ID)
+		if err != nil {
+			t.Fatalf("Get: %v", err)
+		}
+		if got.Status == model.StatusQueued || got.Status == model.StatusProbing || got.Status == model.StatusRunning {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("timed out waiting for promotion; status = %s", got.Status)
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+}
+
+func TestScheduledDownloadStartsImmediately(t *testing.T) {
+	h := newHarness(t, Settings{MaxConcurrent: 1, Connections: 2})
+
+	// StartAt in the past -> starts immediately.
+	d, err := h.m.Add(context.Background(), AddRequest{
+		URL:     "https://example.com/file.bin",
+		StartAt: time.Now().Add(-time.Minute),
+	})
+	if err != nil {
+		t.Fatalf("Add: %v", err)
+	}
+	if d.Status != model.StatusQueued {
+		t.Fatalf("status = %s, want %s", d.Status, model.StatusQueued)
+	}
+
+	// Zero StartAt -> starts immediately.
+	d2, err := h.m.Add(context.Background(), AddRequest{
+		URL: "https://example.com/file2.bin",
+	})
+	if err != nil {
+		t.Fatalf("Add: %v", err)
+	}
+	if d2.Status != model.StatusQueued {
+		t.Fatalf("status = %s, want %s", d2.Status, model.StatusQueued)
+	}
+}
+
+func TestScheduledDownloadCanBeCanceled(t *testing.T) {
+	h := newHarness(t, Settings{MaxConcurrent: 1, Connections: 2})
+
+	start := time.Now().Add(10 * time.Second)
+	d, err := h.m.Add(context.Background(), AddRequest{
+		URL:     "https://example.com/file.bin",
+		StartAt: start,
+	})
+	if err != nil {
+		t.Fatalf("Add: %v", err)
+	}
+
+	d, err = h.m.Cancel(context.Background(), d.ID)
+	if err != nil {
+		t.Fatalf("Cancel: %v", err)
+	}
+	if d.Status != model.StatusCanceled {
+		t.Fatalf("status = %s, want %s", d.Status, model.StatusCanceled)
+	}
+
+	// Pump should not resurrect it.
+	h.m.pump()
+	got, err := h.m.Get(context.Background(), d.ID)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if got.Status != model.StatusCanceled {
+		t.Fatalf("after pump status = %s, want %s", got.Status, model.StatusCanceled)
+	}
+}
+
+func TestScheduledDownloadPersistedAcrossRestart(t *testing.T) {
+	dir := t.TempDir()
+	st, err := store.Open(filepath.Join(dir, "dm.db"))
+	if err != nil {
+		t.Fatalf("store.Open: %v", err)
+	}
+	defer st.Close()
+
+	start := time.Now().Add(10 * time.Second)
+	settings := Settings{Dir: filepath.Join(dir, "out"), MaxConcurrent: 1, Connections: 2}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	m := New(st, settings, nil)
+	if err := m.Start(ctx); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+
+	d, err := m.Add(context.Background(), AddRequest{
+		URL:     "https://example.com/file.bin",
+		StartAt: start,
+	})
+	if err != nil {
+		t.Fatalf("Add: %v", err)
+	}
+	if d.Status != model.StatusScheduled {
+		t.Fatalf("status = %s, want %s", d.Status, model.StatusScheduled)
+	}
+
+	// Restart the manager; the scheduled download should stay scheduled.
+	sctx, scancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer scancel()
+	if err := m.Shutdown(sctx); err != nil {
+		t.Fatalf("Shutdown: %v", err)
+	}
+
+	m2 := New(st, settings, nil)
+	ctx2, cancel2 := context.WithCancel(context.Background())
+	defer cancel2()
+	if err := m2.Start(ctx2); err != nil {
+		t.Fatalf("Start second: %v", err)
+	}
+	defer func() {
+		sctx2, scancel2 := context.WithTimeout(context.Background(), 5*time.Second)
+		defer scancel2()
+		_ = m2.Shutdown(sctx2)
+	}()
+
+	got, err := m2.Get(context.Background(), d.ID)
+	if err != nil {
+		t.Fatalf("Get after restart: %v", err)
+	}
+	if got.Status != model.StatusScheduled {
+		t.Fatalf("after restart status = %s, want %s", got.Status, model.StatusScheduled)
+	}
+	if !got.StartAt.Equal(start) {
+		t.Fatalf("StartAt after restart = %v, want %v", got.StartAt, start)
+	}
+}

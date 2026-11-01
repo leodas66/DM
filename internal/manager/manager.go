@@ -60,6 +60,7 @@ type AddRequest struct {
 	Filename   string
 	Dir        string
 	CategoryID string
+	StartAt    time.Time
 	Headers    map[string]string
 	Cookies    []model.Cookie
 	Referrer   string
@@ -160,6 +161,12 @@ func (m *Manager) reload(ctx context.Context) error {
 	for _, d := range unfinished {
 		it := &item{d: d}
 		if d.Status == model.StatusPaused {
+			m.items[d.ID] = it
+			m.order = append(m.order, d.ID)
+			continue
+		}
+		if d.Status == model.StatusScheduled && !d.StartAt.IsZero() && d.StartAt.After(time.Now()) {
+			// Still in the future: keep scheduled, the pump will promote it.
 			m.items[d.ID] = it
 			m.order = append(m.order, d.ID)
 			continue
@@ -412,6 +419,21 @@ func (m *Manager) pump() {
 	m.settingsMu.Lock()
 	maxConcurrent := m.settings.MaxConcurrent
 	m.settingsMu.Unlock()
+	// Promote scheduled downloads whose start time has arrived.
+	now := time.Now()
+	for _, id := range m.order {
+		it := m.items[id]
+		if it == nil || it.d.Status != model.StatusScheduled {
+			continue
+		}
+		if !it.d.StartAt.IsZero() && !it.d.StartAt.After(now) {
+			it.d.Status = model.StatusQueued
+			it.d.Error = ""
+			m.queue = append(m.queue, id)
+			m.save(it)
+			m.emit(model.EventStatusChanged, it.d)
+		}
+	}
 	for m.active < maxConcurrent && len(m.queue) > 0 {
 		id := m.queue[0]
 		m.queue = m.queue[1:]
@@ -669,8 +691,13 @@ func (m *Manager) add(ctx context.Context, req AddRequest) result {
 		Filename:   name,
 		Dir:        absDir,
 		CategoryID: req.CategoryID,
+		StartAt:    req.StartAt,
 		Status:     model.StatusQueued,
 		CreatedAt:  time.Now().UTC(),
+	}
+	// A download scheduled for the future starts out scheduled, not queued.
+	if !req.StartAt.IsZero() && req.StartAt.After(time.Now()) {
+		d.Status = model.StatusScheduled
 	}
 	it := &item{d: d, creds: model.Credentials{
 		Headers:  req.Headers,
@@ -682,7 +709,9 @@ func (m *Manager) add(ctx context.Context, req AddRequest) result {
 	}
 	m.items[d.ID] = it
 	m.order = append(m.order, d.ID)
-	m.queue = append(m.queue, d.ID)
+	if d.Status == model.StatusQueued {
+		m.queue = append(m.queue, d.ID)
+	}
 	m.emit(model.EventAdded, d)
 	return result{download: d}
 }

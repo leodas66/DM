@@ -36,6 +36,12 @@ type Download struct {
 	// empty when uncategorized.
 	CategoryID string `json:"categoryId,omitempty"`
 
+	// StartAt is the time at which the download should begin. When zero the
+	// download starts immediately; when in the future it stays in
+	// StatusScheduled until the time arrives, at which point the Manager
+	// promotes it to StatusQueued.
+	StartAt time.Time `json:"startAt,omitempty"`
+
 	// Size is the total file size in bytes, or 0 when the server did not
 	// report a length. A 0 Size forces single-stream download.
 	Size int64 `json:"size"`

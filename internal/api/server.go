@@ -44,12 +44,14 @@ var ErrInvalidToken = errors.New("api: invalid bearer token")
 
 // addRequest is the JSON body for POST /api/downloads.
 type addRequest struct {
-	URL      string            `json:"url"`
-	Filename string            `json:"filename,omitempty"`
-	Dir      string            `json:"dir,omitempty"`
-	Headers  map[string]string `json:"headers,omitempty"`
-	Cookies  []model.Cookie    `json:"cookies,omitempty"`
-	Referrer string            `json:"referrer,omitempty"`
+	URL        string            `json:"url"`
+	Filename   string            `json:"filename,omitempty"`
+	Dir        string            `json:"dir,omitempty"`
+	CategoryID string            `json:"categoryId,omitempty"`
+	StartAt    string            `json:"startAt,omitempty"`
+	Headers    map[string]string `json:"headers,omitempty"`
+	Cookies    []model.Cookie    `json:"cookies,omitempty"`
+	Referrer   string            `json:"referrer,omitempty"`
 }
 
 // settingsRequest is the JSON body for PUT /api/settings. Pointer fields
@@ -297,13 +299,25 @@ func (s *Server) handleAdd(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var startAt time.Time
+	var parseErr error
+	if req.StartAt != "" {
+		startAt, parseErr = time.Parse(time.RFC3339, req.StartAt)
+		if parseErr != nil {
+			writeJSON(w, http.StatusBadRequest, errorResponse{Error: "invalid startAt: use RFC3339"})
+			return
+		}
+	}
+
 	d, err := s.mgr.Add(r.Context(), manager.AddRequest{
-		URL:      req.URL,
-		Filename: req.Filename,
-		Dir:      req.Dir,
-		Headers:  req.Headers,
-		Cookies:  req.Cookies,
-		Referrer: req.Referrer,
+		URL:        req.URL,
+		Filename:   req.Filename,
+		Dir:        req.Dir,
+		CategoryID: req.CategoryID,
+		StartAt:    startAt,
+		Headers:    req.Headers,
+		Cookies:    req.Cookies,
+		Referrer:   req.Referrer,
 	})
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {

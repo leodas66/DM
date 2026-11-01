@@ -28,6 +28,7 @@ var migrations = []string{
 		filename      TEXT NOT NULL,
 		dir           TEXT NOT NULL,
 		category_id   TEXT NOT NULL DEFAULT '',
+		start_at      INTEGER NOT NULL DEFAULT 0,
 		size          INTEGER NOT NULL DEFAULT 0,
 		accepts_ranges INTEGER NOT NULL DEFAULT 0,
 		etag          TEXT NOT NULL DEFAULT '',
@@ -128,22 +129,23 @@ func (s *Store) Save(ctx context.Context, d model.Download) error {
 	defer tx.Rollback()
 
 	_, err = tx.ExecContext(ctx, `
-		INSERT INTO downloads (id, url, final_url, filename, dir, category_id, size, accepts_ranges,
+		INSERT INTO downloads (id, url, final_url, filename, dir, category_id, start_at, size, accepts_ranges,
 		                       etag, last_modified, status, error, created_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(id) DO UPDATE SET
 			url = excluded.url,
 			final_url = excluded.final_url,
 			filename = excluded.filename,
 			dir = excluded.dir,
 			category_id = excluded.category_id,
+			start_at = excluded.start_at,
 			size = excluded.size,
 			accepts_ranges = excluded.accepts_ranges,
 			etag = excluded.etag,
 			last_modified = excluded.last_modified,
 			status = excluded.status,
 			error = excluded.error`,
-		d.ID, d.URL, d.FinalURL, d.Filename, d.Dir, d.CategoryID, d.Size, boolInt(d.AcceptsRanges),
+		d.ID, d.URL, d.FinalURL, d.Filename, d.Dir, d.CategoryID, d.StartAt.UnixNano(), d.Size, boolInt(d.AcceptsRanges),
 		d.ETag, d.LastModified, string(d.Status), d.Error, d.CreatedAt.UnixNano(),
 	)
 	if err != nil {
@@ -168,7 +170,7 @@ func (s *Store) Save(ctx context.Context, d model.Download) error {
 // Get returns one download with its segments.
 func (s *Store) Get(ctx context.Context, id string) (model.Download, error) {
 	row := s.db.QueryRowContext(ctx, `
-		SELECT id, url, final_url, filename, dir, category_id, size, accepts_ranges, etag,
+		SELECT id, url, final_url, filename, dir, category_id, start_at, size, accepts_ranges, etag,
 		       last_modified, status, error, created_at
 		FROM downloads WHERE id = ?`, id)
 	d, err := scanDownload(row)
@@ -189,7 +191,7 @@ func (s *Store) Get(ctx context.Context, id string) (model.Download, error) {
 // List returns every download, oldest first, with segments.
 func (s *Store) List(ctx context.Context) ([]model.Download, error) {
 	return s.query(ctx, `
-		SELECT id, url, final_url, filename, dir, category_id, size, accepts_ranges, etag,
+		SELECT id, url, final_url, filename, dir, category_id, start_at, size, accepts_ranges, etag,
 		       last_modified, status, error, created_at
 		FROM downloads ORDER BY created_at, id`)
 }
@@ -197,7 +199,7 @@ func (s *Store) List(ctx context.Context) ([]model.Download, error) {
 // Unfinished returns downloads that have not reached a terminal state.
 func (s *Store) Unfinished(ctx context.Context) ([]model.Download, error) {
 	return s.query(ctx, `
-		SELECT id, url, final_url, filename, dir, category_id, size, accepts_ranges, etag,
+		SELECT id, url, final_url, filename, dir, category_id, start_at, size, accepts_ranges, etag,
 		       last_modified, status, error, created_at
 		FROM downloads
 		WHERE status NOT IN ('completed', 'failed', 'canceled')
@@ -370,15 +372,17 @@ func scanDownload(sc scanner) (model.Download, error) {
 		d         model.Download
 		ranges    int
 		status    string
+		startNS   int64
 		createdNS int64
 	)
-	err := sc.Scan(&d.ID, &d.URL, &d.FinalURL, &d.Filename, &d.Dir, &d.CategoryID, &d.Size, &ranges,
+	err := sc.Scan(&d.ID, &d.URL, &d.FinalURL, &d.Filename, &d.Dir, &d.CategoryID, &startNS, &d.Size, &ranges,
 		&d.ETag, &d.LastModified, &status, &d.Error, &createdNS)
 	if err != nil {
 		return model.Download{}, err
 	}
 	d.AcceptsRanges = ranges != 0
 	d.Status = model.Status(status)
+	d.StartAt = time.Unix(0, startNS).UTC()
 	d.CreatedAt = time.Unix(0, createdNS).UTC()
 	return d, nil
 }

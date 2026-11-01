@@ -4,6 +4,7 @@ package model
 //
 // The Manager is the only component that changes it. Valid transitions:
 //
+//	scheduled   -> queued (on start time) | canceled
 //	queued    -> probing | canceled
 //	probing   -> running | failed | canceled
 //	running   -> paused | completed | failed | canceled
@@ -12,6 +13,9 @@ package model
 type Status string
 
 const (
+	// StatusScheduled means the download is accepted but will not start
+	// until its scheduled start time arrives.
+	StatusScheduled Status = "scheduled"
 	// StatusQueued means the download is accepted but not yet started.
 	StatusQueued Status = "queued"
 	// StatusProbing means the daemon is inspecting the remote resource
