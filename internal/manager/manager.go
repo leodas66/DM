@@ -66,10 +66,11 @@ type AddRequest struct {
 
 // Manager is the single owner of download state.
 type Manager struct {
-	store    *store.Store
-	settings Settings
-	client   *http.Client
-	bus      *Bus
+	store      *store.Store
+	settings   Settings
+	settingsMu sync.Mutex
+	client     *http.Client
+	bus        *Bus
 
 	cmds      chan command
 	msgs      chan workerMsg
@@ -89,12 +90,14 @@ type Manager struct {
 }
 
 type item struct {
-	d        model.Download
-	creds    model.Credentials
-	cancel   context.CancelFunc
-	perDL    *Bucket
-	action   string // "pause" or "cancel" while a stop is in flight
-	lastSave time.Time
+	d           model.Download
+	creds       model.Credentials
+	cancel      context.CancelFunc
+	perDL       *Bucket
+	action      string // "pause" or "cancel" while a stop is in flight
+	lastSave    time.Time
+	connections int   // segments for this download
+	minSegment  int64 // min segment size for this download
 }
 
 // New builds a manager over st. It does no I/O until Start.
@@ -242,6 +245,23 @@ func (m *Manager) Get(ctx context.Context, id string) (model.Download, error) {
 	return r.download, r.err
 }
 
+// Settings returns a copy of the current manager settings.
+func (m *Manager) Settings() Settings {
+	m.settingsMu.Lock()
+	defer m.settingsMu.Unlock()
+	return m.settings
+}
+
+// UpdateSettings replaces the manager settings. Rate-limited fields take
+// effect immediately; structural fields (Dir, Connections, MinSegmentSize)
+// apply to newly added downloads.
+func (m *Manager) UpdateSettings(s Settings) {
+	m.settingsMu.Lock()
+	m.settings = s.withDefaults()
+	m.settingsMu.Unlock()
+	m.global.SetRate(s.GlobalLimit)
+}
+
 // Shutdown pauses running downloads, persists them and stops the loop.
 func (m *Manager) Shutdown(ctx context.Context) error {
 	err := m.call(ctx, command{kind: cmdShutdown}).err
@@ -312,7 +332,10 @@ func (m *Manager) handle(ctx context.Context, c command) (stop bool) {
 }
 
 func (m *Manager) pump() {
-	for m.active < m.settings.MaxConcurrent && len(m.queue) > 0 {
+	m.settingsMu.Lock()
+	maxConcurrent := m.settings.MaxConcurrent
+	m.settingsMu.Unlock()
+	for m.active < maxConcurrent && len(m.queue) > 0 {
 		id := m.queue[0]
 		m.queue = m.queue[1:]
 		it, ok := m.items[id]
@@ -324,10 +347,18 @@ func (m *Manager) pump() {
 }
 
 func (m *Manager) startDownload(it *item) {
+	m.settingsMu.Lock()
+	connections := m.settings.Connections
+	minSegmentSize := m.settings.MinSegmentSize
+	perDLLimit := m.settings.PerDownloadLimit
+	m.settingsMu.Unlock()
+
 	ctx, cancel := context.WithCancel(context.Background())
 	it.cancel = cancel
 	it.action = ""
-	it.perDL = NewBucket(m.settings.PerDownloadLimit)
+	it.perDL = NewBucket(perDLLimit)
+	it.connections = connections
+	it.minSegment = minSegmentSize
 	it.d.Status = model.StatusProbing
 	it.d.Error = ""
 	m.active++
@@ -397,8 +428,8 @@ func (m *Manager) work(ctx context.Context, it *item) {
 	}()
 
 	err = download.Run(ctx, cfg, dest, download.Options{
-		Segments:       m.settings.Connections,
-		MinSegmentSize: m.settings.MinSegmentSize,
+		Segments:       it.connections,
+		MinSegmentSize: it.minSegment,
 		Client:         m.client,
 		Limiter:        multiLimiter{m.global, it.perDL},
 	}, events)

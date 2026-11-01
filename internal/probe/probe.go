@@ -83,6 +83,13 @@ func NewClient() *http.Client {
 			}
 			return nil
 		},
+		Transport: &http.Transport{
+			// DisableCompression keeps the raw bytes the server sends so
+			// WriteAt byte-range accounting stays correct: Go's default
+			// transport transparently decompresses gzip, which would make
+			// Content-Length/Content-Range not match the bytes we write.
+			DisableCompression: true,
+		},
 	}
 }
 
