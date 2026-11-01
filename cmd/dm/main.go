@@ -15,6 +15,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"strings"
@@ -113,9 +114,10 @@ func runServe() error {
 		return err
 	}
 	addr := ln.Addr().String()
+	uiURL := fmt.Sprintf("http://%s/?token=%s", addr, token)
 	fmt.Printf("dm daemon listening on http://%s\n", addr)
 	fmt.Printf("Bearer token: %s\n", token)
-	fmt.Printf("Open the UI: http://%s/?token=%s\n", addr, token)
+	fmt.Printf("Opening UI at %s\n", uiURL)
 
 	srv := &http.Server{Handler: handler}
 	go func() {
@@ -124,10 +126,32 @@ func runServe() error {
 		}
 	}()
 
+	// Open the UI in a browser window so dm feels like a desktop app.
+	go openBrowser(uiURL)
+
 	// Wait for shutdown signal.
 	<-ctx.Done()
 	srv.Close()
 	return mgr.Shutdown(context.Background())
+}
+
+// openBrowser tries to open url in an app-style browser window. It never
+// fails the daemon: chromium --app is preferred (windowed, no chrome), then
+// xdg-open as a fallback, and any failure is silently ignored.
+func openBrowser(url string) {
+	browsers := [][]string{
+		{"chromium", "--app=" + url},
+		{"chromium-browser", "--app=" + url},
+		{"google-chrome", "--app=" + url},
+		{"google-chrome-stable", "--app=" + url},
+	}
+	for _, b := range browsers {
+		if err := exec.Command(b[0], b[1:]...).Start(); err == nil {
+			return
+		}
+	}
+	// Fallback to the desktop's default handler.
+	_ = exec.Command("xdg-open", url).Start()
 }
 
 func run(rawURL, dir, outName string, segments, tries int, timeout time.Duration) error {
