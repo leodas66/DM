@@ -1,0 +1,4 @@
+#!/bin/sh
+# Installed via `make hooks` (git config core.hooksPath .githooks).
+# Same gate as CI. Do not bypass with --no-verify; fix the gate instead.
+exec ./scripts/check.sh

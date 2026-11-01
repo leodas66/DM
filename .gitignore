@@ -1,0 +1,17 @@
+# Build artifacts
+/bin/
+*.test
+*.out
+
+# UI and extension
+/ui/node_modules/
+/ui/dist/
+/extension/node_modules/
+/extension/dist/
+/extension/web-ext-artifacts/
+
+# Local state and editor noise
+*.db
+*.db-wal
+*.db-shm
+.DS_Store
