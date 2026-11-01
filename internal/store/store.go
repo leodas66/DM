@@ -27,8 +27,6 @@ var migrations = []string{
 		final_url     TEXT NOT NULL DEFAULT '',
 		filename      TEXT NOT NULL,
 		dir           TEXT NOT NULL,
-		category_id   TEXT NOT NULL DEFAULT '',
-		start_at      INTEGER NOT NULL DEFAULT 0,
 		size          INTEGER NOT NULL DEFAULT 0,
 		accepts_ranges INTEGER NOT NULL DEFAULT 0,
 		etag          TEXT NOT NULL DEFAULT '',
@@ -47,7 +45,9 @@ var migrations = []string{
 		downloaded  INTEGER NOT NULL DEFAULT 0,
 		status      TEXT NOT NULL,
 		PRIMARY KEY (download_id, idx)
-	);
+	);`,
+	`ALTER TABLE downloads ADD COLUMN category_id TEXT NOT NULL DEFAULT '';
+	ALTER TABLE downloads ADD COLUMN start_at INTEGER NOT NULL DEFAULT 0;
 
 	CREATE TABLE categories (
 		id          TEXT PRIMARY KEY,
