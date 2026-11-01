@@ -1,0 +1,15 @@
+.container {
+  font-family: system-ui, -apple-system, sans-serif;
+  width: 340px;
+  padding: 16px;
+}
+h1 { margin: 0 0 8px; font-size: 18px; }
+.muted { color: #666; font-size: 12px; margin-bottom: 16px; }
+label { display: block; font-size: 12px; margin-bottom: 4px; }
+input { width: 100%; padding: 6px; font-size: 13px; margin-bottom: 10px; box-sizing: border-box; }
+.row { display: flex; gap: 8px; }
+button { flex: 1; padding: 6px 10px; font-size: 13px; cursor: pointer; }
+button#openOptions { background: transparent; border: 1px solid #ccc; color: #333; }
+.status { margin-top: 10px; font-size: 12px; min-height: 18px; }
+.status.ok { color: #2f7d32; }
+.status.err { color: #b00020; }

@@ -91,3 +91,10 @@ Then `./bin/dm -d /tmp/out -n 8 http://127.0.0.1:8099/big.bin`.
 ## Deferred checks
 
 Record any check skipped, with the reason and the phase it was moved to.
+
+| Phase | Check | Reason |
+|---|---|---|
+| 4 | Cookie-protected download, Chrome | No Chrome available in this environment; verify manually with a loaded unpacked extension |
+| 4 | Cookie-protected download, Firefox | No Firefox available in this environment; verify manually with a temporary add-on |
+| 4 | Daemon stopped → browser proceeds | Same; manual browser check |
+| 4 | Below minimum-size filter | Same; manual browser check |

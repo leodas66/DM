@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>dm settings</title>
+    <link rel="stylesheet" href="options.css" />
+  </head>
+  <body>
+    <div class="container">
+      <h1>dm settings</h1>
+      <p class="muted">Configure the connection to the local dm daemon.</p>
+      <form id="form">
+        <label>Daemon port</label>
+        <input id="port" type="number" min="1" max="65535" placeholder="e.g. 8080" />
+
+        <label>Bearer token</label>
+        <input id="token" type="password" placeholder="from ~/.config/dm/token" />
+        <p class="hint">Token is stored in Chrome's sync storage, never sent anywhere except the local daemon.</p>
+
+        <label>Minimum file size to capture (bytes, 0 = all)</label>
+        <input id="minSize" type="number" min="0" placeholder="0" />
+
+        <label>Allow hosts (comma-separated, empty = allow all)</label>
+        <input id="allowHosts" type="text" placeholder="example.com, dl.example.org" />
+
+        <label>Deny hosts (comma-separated, empty = deny none)</label>
+        <input id="denyHosts" type="text" placeholder="tracker.example.com" />
+
+        <div class="row">
+          <button type="submit">Save</button>
+          <button type="button" id="clear">Clear</button>
+        </div>
+      </form>
+      <div id="status" class="status"></div>
+    </div>
+    <script src="options.js"></script>
+  </body>
+</html>
