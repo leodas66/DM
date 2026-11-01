@@ -2,6 +2,7 @@ package web
 
 import (
 	"io"
+	"io/fs"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -76,7 +77,22 @@ func TestHandlerServesAssets(t *testing.T) {
 	api := &captureHandler{}
 	h := Handler(api)
 
-	req := httptest.NewRequest(http.MethodGet, "/assets/index-Bhyvmn_Z.js", nil)
+	// Discover the actual asset name from the embedded FS instead of
+	// hardcoding a hashed filename that changes on every rebuild.
+	static, err := fs.Sub(embedFS, "dist")
+	if err != nil {
+		t.Fatalf("fs.Sub: %v", err)
+	}
+	entries, err := fs.ReadDir(static, "assets")
+	if err != nil {
+		t.Fatalf("ReadDir assets: %v", err)
+	}
+	if len(entries) == 0 {
+		t.Fatal("no assets found in embedded dist")
+	}
+	assetName := entries[0].Name()
+
+	req := httptest.NewRequest(http.MethodGet, "/assets/"+assetName, nil)
 	w := httptest.NewRecorder()
 	h.ServeHTTP(w, req)
 	if w.Code != http.StatusOK {

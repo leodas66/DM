@@ -206,3 +206,87 @@ func TestReopenKeepsDataAndSkipsAppliedMigrations(t *testing.T) {
 		t.Errorf("status = %s", got.Status)
 	}
 }
+
+func sampleCategory(id string) model.Category {
+	return model.Category{
+		ID:         id,
+		Name:       "Videos",
+		DefaultDir: "/home/user/downloads/videos",
+		CreatedAt:  time.Date(2026, 11, 1, 12, 0, 0, 0, time.UTC),
+	}
+}
+
+func TestCategorySaveAndGetRoundTrip(t *testing.T) {
+	s := openTemp(t)
+	want := sampleCategory("c1")
+	if err := s.SaveCategory(context.Background(), want); err != nil {
+		t.Fatalf("SaveCategory: %v", err)
+	}
+
+	got, err := s.GetCategory(context.Background(), "c1")
+	if err != nil {
+		t.Fatalf("GetCategory: %v", err)
+	}
+	if got.ID != want.ID || got.Name != want.Name || got.DefaultDir != want.DefaultDir {
+		t.Fatalf("mismatch:\n got %+v\nwant %+v", got, want)
+	}
+	if !got.CreatedAt.Equal(want.CreatedAt) {
+		t.Errorf("CreatedAt = %v, want %v", got.CreatedAt, want.CreatedAt)
+	}
+}
+
+func TestCategoryGetMissing(t *testing.T) {
+	s := openTemp(t)
+	if _, err := s.GetCategory(context.Background(), "nope"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("GetCategory missing = %v, want ErrNotFound", err)
+	}
+}
+
+func TestCategoryList(t *testing.T) {
+	s := openTemp(t)
+	a := sampleCategory("c-a")
+	a.CreatedAt = a.CreatedAt.Add(time.Hour)
+	b := sampleCategory("c-b")
+	for _, c := range []model.Category{a, b} {
+		if err := s.SaveCategory(context.Background(), c); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	got, err := s.ListCategories(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 2 || got[0].ID != "c-b" || got[1].ID != "c-a" {
+		t.Fatalf("order = %v", []string{got[0].ID, got[1].ID})
+	}
+}
+
+func TestCategoryDelete(t *testing.T) {
+	s := openTemp(t)
+	if err := s.SaveCategory(context.Background(), sampleCategory("c1")); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.DeleteCategory(context.Background(), "c1"); err != nil {
+		t.Fatalf("DeleteCategory: %v", err)
+	}
+	if _, err := s.GetCategory(context.Background(), "c1"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("GetCategory after delete = %v, want ErrNotFound", err)
+	}
+}
+
+func TestDownloadCategoryIDRoundTrip(t *testing.T) {
+	s := openTemp(t)
+	d := sample("d1")
+	d.CategoryID = "c1"
+	if err := s.Save(context.Background(), d); err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.Get(context.Background(), "d1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.CategoryID != "c1" {
+		t.Fatalf("CategoryID = %q, want %q", got.CategoryID, "c1")
+	}
+}

@@ -1,3 +1,5 @@
+// Package model defines the core types shared across the daemon: Download,
+// Segment, Status, Event, Credentials, and Category.
 package model
 
 import "time"
@@ -29,6 +31,10 @@ type Download struct {
 	// Dir is the absolute destination directory. The file is always
 	// Dir/Filename; nothing may be written outside Dir.
 	Dir string `json:"dir"`
+
+	// CategoryID is the id of the category this download belongs to, or
+	// empty when uncategorized.
+	CategoryID string `json:"categoryId,omitempty"`
 
 	// Size is the total file size in bytes, or 0 when the server did not
 	// report a length. A 0 Size forces single-stream download.

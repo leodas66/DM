@@ -56,12 +56,13 @@ func (s Settings) withDefaults() Settings {
 // AddRequest is one accepted download. Filename may be empty, in which case
 // probing decides it.
 type AddRequest struct {
-	URL      string
-	Filename string
-	Dir      string
-	Headers  map[string]string
-	Cookies  []model.Cookie
-	Referrer string
+	URL        string
+	Filename   string
+	Dir        string
+	CategoryID string
+	Headers    map[string]string
+	Cookies    []model.Cookie
+	Referrer   string
 }
 
 // Manager is the single owner of download state.
@@ -188,6 +189,10 @@ const (
 	cmdRemove
 	cmdList
 	cmdGet
+	cmdAddCategory
+	cmdListCategories
+	cmdGetCategory
+	cmdDeleteCategory
 	cmdShutdown
 )
 
@@ -195,14 +200,17 @@ type command struct {
 	kind       cmdKind
 	id         string
 	add        AddRequest
+	category   model.Category
 	deleteFile bool
 	reply      chan result
 }
 
 type result struct {
-	download model.Download
-	list     []model.Download
-	err      error
+	download   model.Download
+	list       []model.Download
+	category   model.Category
+	categories []model.Category
+	err        error
 }
 
 func (m *Manager) call(ctx context.Context, c command) result {
@@ -263,6 +271,29 @@ func (m *Manager) List(ctx context.Context) ([]model.Download, error) {
 func (m *Manager) Get(ctx context.Context, id string) (model.Download, error) {
 	r := m.call(ctx, command{kind: cmdGet, id: id})
 	return r.download, r.err
+}
+
+// AddCategory creates or updates a category.
+func (m *Manager) AddCategory(ctx context.Context, c model.Category) (model.Category, error) {
+	r := m.call(ctx, command{kind: cmdAddCategory, category: c})
+	return r.category, r.err
+}
+
+// ListCategories returns every category, oldest first.
+func (m *Manager) ListCategories(ctx context.Context) ([]model.Category, error) {
+	r := m.call(ctx, command{kind: cmdListCategories})
+	return r.categories, r.err
+}
+
+// GetCategory returns one category by id.
+func (m *Manager) GetCategory(ctx context.Context, id string) (model.Category, error) {
+	r := m.call(ctx, command{kind: cmdGetCategory, id: id})
+	return r.category, r.err
+}
+
+// DeleteCategory removes a category by id.
+func (m *Manager) DeleteCategory(ctx context.Context, id string) error {
+	return m.call(ctx, command{kind: cmdDeleteCategory, id: id}).err
 }
 
 // Settings returns a copy of the current manager settings.
@@ -342,6 +373,32 @@ func (m *Manager) handle(ctx context.Context, c command) (stop bool) {
 			c.reply <- result{download: it.d}
 		} else {
 			c.reply <- result{err: store.ErrNotFound}
+		}
+	case cmdAddCategory:
+		if err := m.store.SaveCategory(ctx, c.category); err != nil {
+			c.reply <- result{err: err}
+		} else {
+			c.reply <- result{category: c.category}
+		}
+	case cmdListCategories:
+		list, err := m.store.ListCategories(ctx)
+		if err != nil {
+			c.reply <- result{err: err}
+		} else {
+			c.reply <- result{categories: list}
+		}
+	case cmdGetCategory:
+		cat, err := m.store.GetCategory(ctx, c.id)
+		if err != nil {
+			c.reply <- result{err: err}
+		} else {
+			c.reply <- result{category: cat}
+		}
+	case cmdDeleteCategory:
+		if err := m.store.DeleteCategory(ctx, c.id); err != nil {
+			c.reply <- result{err: err}
+		} else {
+			c.reply <- result{}
 		}
 	case cmdShutdown:
 		m.shutdown()
@@ -583,6 +640,11 @@ func (m *Manager) add(ctx context.Context, req AddRequest) result {
 		return result{err: fmt.Errorf("manager: only http and https URLs are supported")}
 	}
 	dir := req.Dir
+	if dir == "" && req.CategoryID != "" {
+		if cat, err := m.store.GetCategory(ctx, req.CategoryID); err == nil && cat.DefaultDir != "" {
+			dir = cat.DefaultDir
+		}
+	}
 	if dir == "" {
 		dir = m.settings.Dir
 	}
@@ -602,12 +664,13 @@ func (m *Manager) add(ctx context.Context, req AddRequest) result {
 	}
 
 	d := model.Download{
-		ID:        newID(),
-		URL:       u,
-		Filename:  name,
-		Dir:       absDir,
-		Status:    model.StatusQueued,
-		CreatedAt: time.Now().UTC(),
+		ID:         newID(),
+		URL:        u,
+		Filename:   name,
+		Dir:        absDir,
+		CategoryID: req.CategoryID,
+		Status:     model.StatusQueued,
+		CreatedAt:  time.Now().UTC(),
 	}
 	it := &item{d: d, creds: model.Credentials{
 		Headers:  req.Headers,
@@ -778,3 +841,8 @@ func newID() string {
 	}
 	return hex.EncodeToString(b[:])
 }
+
+// NewID generates a random 128-bit identifier rendered as 32 lowercase hex
+// characters. Exported so callers outside the manager can mint ids (for
+// example the API layer creating categories).
+func NewID() string { return newID() }

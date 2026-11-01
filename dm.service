@@ -1,0 +1,15 @@
+[Unit]
+Description=dm download manager daemon
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/dm --serve
+Restart=on-failure
+RestartSec=5
+# The daemon binds to 127.0.0.1 only and creates its own config dir.
+# No User= here: runs as the invoking user under systemd --user.
+
+[Install]
+WantedBy=default.target

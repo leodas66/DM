@@ -34,10 +34,11 @@ export function listDownloads() {
   return request('/api/downloads');
 }
 
-export function addDownload(url, filename, dir) {
+export function addDownload(url, filename, dir, categoryId) {
   const body = { url };
   if (filename) body.filename = filename;
   if (dir) body.dir = dir;
+  if (categoryId) body.categoryId = categoryId;
   return request('/api/downloads', { method: 'POST', body: JSON.stringify(body) });
 }
 
@@ -65,6 +66,21 @@ export function getSettings() {
 
 export function updateSettings(settings) {
   return request('/api/settings', { method: 'PUT', body: JSON.stringify(settings) });
+}
+
+export function listCategories() {
+  return request('/api/categories');
+}
+
+export function addCategory(name, defaultDir) {
+  return request('/api/categories', {
+    method: 'POST',
+    body: JSON.stringify({ name, defaultDir }),
+  });
+}
+
+export function deleteCategory(id) {
+  return request('/api/categories/' + encodeURIComponent(id), { method: 'DELETE' });
 }
 
 export function connectWebSocket(onEvent) {

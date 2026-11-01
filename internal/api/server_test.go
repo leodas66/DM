@@ -667,3 +667,162 @@ func TestWriteTextFrameRoundTrip(t *testing.T) {
 }
 
 func ptr[T any](v T) *T { return &v }
+
+// ---- Category API tests ----
+
+func TestCategoriesCRUD(t *testing.T) {
+	h := newHarness(t, "secret-token")
+	defer h.close()
+
+	// Empty list.
+	list, err := h.mgr.ListCategories(context.Background())
+	if err != nil {
+		t.Fatalf("list categories: %v", err)
+	}
+	if len(list) != 0 {
+		t.Fatalf("expected empty category list, got %d", len(list))
+	}
+
+	// Add a category.
+	resp, err := h.restReq(http.MethodPost, "/api/categories", "secret-token", categoryRequest{
+		Name:       "Videos",
+		DefaultDir: "/home/user/downloads/videos",
+	})
+	if err != nil {
+		t.Fatalf("add category request: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusCreated {
+		b, _ := io.ReadAll(resp.Body)
+		t.Fatalf("add category failed: %s %s", resp.Status, string(b))
+	}
+	var cat model.Category
+	if err := json.NewDecoder(resp.Body).Decode(&cat); err != nil {
+		t.Fatalf("decode category: %v", err)
+	}
+	if cat.ID == "" {
+		t.Fatal("expected category ID")
+	}
+	if cat.Name != "Videos" {
+		t.Fatalf("expected name Videos, got %s", cat.Name)
+	}
+	if cat.DefaultDir != "/home/user/downloads/videos" {
+		t.Fatalf("expected defaultDir, got %s", cat.DefaultDir)
+	}
+
+	// List contains it.
+	list, err = h.mgr.ListCategories(context.Background())
+	if err != nil {
+		t.Fatalf("list categories: %v", err)
+	}
+	if len(list) != 1 || list[0].ID != cat.ID {
+		t.Fatalf("expected 1 category with id %s, got %v", cat.ID, list)
+	}
+
+	// Get one.
+	got, err := h.mgr.GetCategory(context.Background(), cat.ID)
+	if err != nil {
+		t.Fatalf("get category: %v", err)
+	}
+	if got.ID != cat.ID || got.Name != "Videos" {
+		t.Fatalf("expected category %s, got %+v", cat.ID, got)
+	}
+
+	// Get missing.
+	_, err = h.mgr.GetCategory(context.Background(), "nonexistent")
+	if !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("expected ErrNotFound, got %v", err)
+	}
+
+	// Delete.
+	resp, err = h.restReq(http.MethodDelete, "/api/categories/"+cat.ID, "secret-token", nil)
+	if err != nil {
+		t.Fatalf("delete category request: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("expected 204, got %s", resp.Status)
+	}
+
+	// Confirm it's gone.
+	_, err = h.mgr.GetCategory(context.Background(), cat.ID)
+	if !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("expected ErrNotFound after delete, got %v", err)
+	}
+
+	// Delete missing.
+	resp, err = h.restReq(http.MethodDelete, "/api/categories/nonexistent", "secret-token", nil)
+	if err != nil {
+		t.Fatalf("delete missing category request: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("expected 404 for missing delete, got %s", resp.Status)
+	}
+}
+
+func TestCategoriesAddRequiresName(t *testing.T) {
+	h := newHarness(t, "secret-token")
+	defer h.close()
+
+	resp, err := h.restReq(http.MethodPost, "/api/categories", "secret-token", categoryRequest{
+		Name: "",
+	})
+	if err != nil {
+		t.Fatalf("add category request: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("expected 400 for empty name, got %s", resp.Status)
+	}
+}
+
+func TestCategoryDefaultDirAppliedToDownload(t *testing.T) {
+	h := newHarness(t, "secret-token")
+	defer h.close()
+
+	dir := t.TempDir()
+
+	// Add a category with a default dir.
+	resp, err := h.restReq(http.MethodPost, "/api/categories", "secret-token", categoryRequest{
+		Name:       "Documents",
+		DefaultDir: dir,
+	})
+	if err != nil {
+		t.Fatalf("add category: %v", err)
+	}
+	defer resp.Body.Close()
+	var cat model.Category
+	if err := json.NewDecoder(resp.Body).Decode(&cat); err != nil {
+		t.Fatalf("decode category: %v", err)
+	}
+
+	// Add a download with the category but no dir -> should use category default.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Length", "12")
+		w.Header().Set("Accept-Ranges", "bytes")
+		io.WriteString(w, "hello world!")
+	}))
+	defer srv.Close()
+
+	d := h.addDownloadWithCategory(t, srv.URL, cat.ID, "secret-token")
+	if d.CategoryID != cat.ID {
+		t.Fatalf("expected CategoryID %s, got %s", cat.ID, d.CategoryID)
+	}
+	if d.Dir != dir {
+		t.Fatalf("expected dir %s, got %s", dir, d.Dir)
+	}
+}
+
+// addDownloadWithCategory adds a download via the manager directly with a category.
+func (h *harness) addDownloadWithCategory(t *testing.T, url string, categoryID string, token string) model.Download {
+	t.Helper()
+	d, err := h.mgr.Add(context.Background(), manager.AddRequest{
+		URL:        url,
+		CategoryID: categoryID,
+	})
+	if err != nil {
+		t.Fatalf("add download: %v", err)
+	}
+	return d
+}

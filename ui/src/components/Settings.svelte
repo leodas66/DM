@@ -1,5 +1,6 @@
 <script>
   import { getSettings, updateSettings, getToken, setToken } from '../api.js';
+  import { listCategories, addCategory, deleteCategory } from '../api.js';
 
   let settings = {
     dir: '',
@@ -16,11 +17,18 @@
   let err = null;
   let msg = null;
 
+  let categories = [];
+  let newCatName = '';
+  let newCatDir = '';
+  let catLoading = false;
+  let catErr = null;
+
   async function load() {
     try {
       const s = await getSettings();
       settings = { ...settings, ...s };
       token = getToken();
+      categories = await listCategories();
     } catch (e) {
       err = 'Cannot reach daemon: ' + e.message;
     }
@@ -54,6 +62,34 @@
     if (token.trim()) setToken(token.trim());
     msg = 'Token saved.';
     setTimeout(() => (msg = null), 3000);
+  }
+
+  async function addNewCategory() {
+    const name = newCatName.trim();
+    const defaultDir = newCatDir.trim();
+    if (!name) return;
+    catLoading = true;
+    catErr = null;
+    try {
+      const c = await addCategory(name, defaultDir || undefined);
+      categories = [...categories, c];
+      newCatName = '';
+      newCatDir = '';
+    } catch (e) {
+      catErr = e.message;
+    } finally {
+      catLoading = false;
+    }
+  }
+
+  async function removeCategory(id) {
+    if (!confirm('Remove this category? Downloads using it will keep their category reference.')) return;
+    try {
+      await deleteCategory(id);
+      categories = categories.filter((c) => c.id !== id);
+    } catch (e) {
+      catErr = e.message;
+    }
   }
 
   function formatBytes(bytes, decimals = 0) {
@@ -103,6 +139,30 @@
     <input bind:value={settings.saveInterval} placeholder="1s" />
   </section>
 
+  <section>
+    <h3>Categories</h3>
+    <p class="hint">Categories set a default download directory. Pick one when adding a download.</p>
+    {#if catErr}<div class="error">{catErr}</div>{/if}
+    <ul class="category-list">
+      {#each categories as c}
+        <li class="category-item">
+          <span>{c.name} — {c.defaultDir || '(no default)'}</span>
+          <button type="button" onclick={() => removeCategory(c.id)} class="remove-cat">Remove</button>
+        </li>
+      {:else}
+        <li class="category-empty">No categories yet.</li>
+      {/each}
+    </ul>
+    <div class="new-category">
+      <label>New category</label>
+      <div class="new-category-row">
+        <input bind:value={newCatName} placeholder="Category name" />
+        <input bind:value={newCatDir} placeholder="Default directory (optional)" />
+        <button type="button" onclick={addNewCategory} disabled={catLoading}>+</button>
+      </div>
+    </div>
+  </section>
+
   <div class="actions">
     <button onclick={save} disabled={saving}>{saving ? 'Saving…' : 'Save settings'}</button>
   </div>
@@ -122,4 +182,16 @@
   button { padding: 8px 16px; font-size: 14px; border-radius: 6px; border: 1px solid #0066cc; background: #0066cc; color: #fff; cursor: pointer; }
   button:hover { background: #0052a3; }
   button:disabled { opacity: 0.6; cursor: not-allowed; }
+
+  .category-list { list-style: none; padding: 0; margin: 12px 0 8px; border: 1px solid #ddd; border-radius: 6px; background: #fff; }
+  .category-item { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; border-bottom: 1px solid #eee; font-size: 13px; }
+  .category-item:last-child { border-bottom: none; }
+  .category-item span { flex: 1; color: #333; }
+  .category-item .remove-cat { padding: 4px 10px; font-size: 12px; color: #b00020; border: 1px solid #b00020; background: #fff; }
+  .category-item .remove-cat:hover { background: #fdecea; }
+  .category-empty { padding: 8px 12px; color: #666; font-size: 13px; }
+  .new-category { margin-top: 8px; }
+  .new-category-row { display: flex; gap: 6px; margin-top: 4px; }
+  .new-category-row input { flex: 1; padding: 7px 10px; font-size: 13px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; }
+  .new-category-row button { width: 34px; padding: 0; }
 </style>

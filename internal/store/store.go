@@ -27,6 +27,7 @@ var migrations = []string{
 		final_url     TEXT NOT NULL DEFAULT '',
 		filename      TEXT NOT NULL,
 		dir           TEXT NOT NULL,
+		category_id   TEXT NOT NULL DEFAULT '',
 		size          INTEGER NOT NULL DEFAULT 0,
 		accepts_ranges INTEGER NOT NULL DEFAULT 0,
 		etag          TEXT NOT NULL DEFAULT '',
@@ -45,7 +46,15 @@ var migrations = []string{
 		downloaded  INTEGER NOT NULL DEFAULT 0,
 		status      TEXT NOT NULL,
 		PRIMARY KEY (download_id, idx)
-	);`,
+	);
+
+	CREATE TABLE categories (
+		id          TEXT PRIMARY KEY,
+		name        TEXT NOT NULL,
+		default_dir TEXT NOT NULL,
+		created_at  INTEGER NOT NULL
+	);
+	CREATE INDEX categories_name ON categories(name);`,
 }
 
 // Store is a handle to the SQLite database.
@@ -119,21 +128,22 @@ func (s *Store) Save(ctx context.Context, d model.Download) error {
 	defer tx.Rollback()
 
 	_, err = tx.ExecContext(ctx, `
-		INSERT INTO downloads (id, url, final_url, filename, dir, size, accepts_ranges,
+		INSERT INTO downloads (id, url, final_url, filename, dir, category_id, size, accepts_ranges,
 		                       etag, last_modified, status, error, created_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(id) DO UPDATE SET
 			url = excluded.url,
 			final_url = excluded.final_url,
 			filename = excluded.filename,
 			dir = excluded.dir,
+			category_id = excluded.category_id,
 			size = excluded.size,
 			accepts_ranges = excluded.accepts_ranges,
 			etag = excluded.etag,
 			last_modified = excluded.last_modified,
 			status = excluded.status,
 			error = excluded.error`,
-		d.ID, d.URL, d.FinalURL, d.Filename, d.Dir, d.Size, boolInt(d.AcceptsRanges),
+		d.ID, d.URL, d.FinalURL, d.Filename, d.Dir, d.CategoryID, d.Size, boolInt(d.AcceptsRanges),
 		d.ETag, d.LastModified, string(d.Status), d.Error, d.CreatedAt.UnixNano(),
 	)
 	if err != nil {
@@ -158,7 +168,7 @@ func (s *Store) Save(ctx context.Context, d model.Download) error {
 // Get returns one download with its segments.
 func (s *Store) Get(ctx context.Context, id string) (model.Download, error) {
 	row := s.db.QueryRowContext(ctx, `
-		SELECT id, url, final_url, filename, dir, size, accepts_ranges, etag,
+		SELECT id, url, final_url, filename, dir, category_id, size, accepts_ranges, etag,
 		       last_modified, status, error, created_at
 		FROM downloads WHERE id = ?`, id)
 	d, err := scanDownload(row)
@@ -179,7 +189,7 @@ func (s *Store) Get(ctx context.Context, id string) (model.Download, error) {
 // List returns every download, oldest first, with segments.
 func (s *Store) List(ctx context.Context) ([]model.Download, error) {
 	return s.query(ctx, `
-		SELECT id, url, final_url, filename, dir, size, accepts_ranges, etag,
+		SELECT id, url, final_url, filename, dir, category_id, size, accepts_ranges, etag,
 		       last_modified, status, error, created_at
 		FROM downloads ORDER BY created_at, id`)
 }
@@ -187,7 +197,7 @@ func (s *Store) List(ctx context.Context) ([]model.Download, error) {
 // Unfinished returns downloads that have not reached a terminal state.
 func (s *Store) Unfinished(ctx context.Context) ([]model.Download, error) {
 	return s.query(ctx, `
-		SELECT id, url, final_url, filename, dir, size, accepts_ranges, etag,
+		SELECT id, url, final_url, filename, dir, category_id, size, accepts_ranges, etag,
 		       last_modified, status, error, created_at
 		FROM downloads
 		WHERE status NOT IN ('completed', 'failed', 'canceled')
@@ -197,6 +207,79 @@ func (s *Store) Unfinished(ctx context.Context) ([]model.Download, error) {
 // Delete removes a download; its segments go with it via ON DELETE CASCADE.
 func (s *Store) Delete(ctx context.Context, id string) error {
 	_, err := s.db.ExecContext(ctx, `DELETE FROM downloads WHERE id = ?`, id)
+	return err
+}
+
+// SaveCategory upserts a category.
+func (s *Store) SaveCategory(ctx context.Context, c model.Category) error {
+	_, err := s.db.ExecContext(ctx, `
+		INSERT INTO categories (id, name, default_dir, created_at)
+		VALUES (?, ?, ?, ?)
+		ON CONFLICT(id) DO UPDATE SET
+			name = excluded.name,
+			default_dir = excluded.default_dir`,
+		c.ID, c.Name, c.DefaultDir, c.CreatedAt.UnixNano(),
+	)
+	if err != nil {
+		return fmt.Errorf("store: upsert category: %w", err)
+	}
+	return nil
+}
+
+// GetCategory returns one category by id.
+func (s *Store) GetCategory(ctx context.Context, id string) (model.Category, error) {
+	row := s.db.QueryRowContext(ctx, `
+		SELECT id, name, default_dir, created_at
+		FROM categories WHERE id = ?`, id)
+	var c model.Category
+	var createdNS int64
+	err := row.Scan(&c.ID, &c.Name, &c.DefaultDir, &createdNS)
+	if errors.Is(err, sql.ErrNoRows) {
+		return model.Category{}, ErrNotFound
+	}
+	if err != nil {
+		return model.Category{}, err
+	}
+	c.CreatedAt = time.Unix(0, createdNS).UTC()
+	return c, nil
+}
+
+// ListCategories returns every category, oldest first.
+func (s *Store) ListCategories(ctx context.Context) ([]model.Category, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT id, name, default_dir, created_at
+		FROM categories ORDER BY created_at, id`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []model.Category
+	for rows.Next() {
+		var c model.Category
+		var createdNS int64
+		if err := rows.Scan(&c.ID, &c.Name, &c.DefaultDir, &createdNS); err != nil {
+			return nil, err
+		}
+		c.CreatedAt = time.Unix(0, createdNS).UTC()
+		out = append(out, c)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if len(out) == 0 {
+		return out, nil
+	}
+	return out, nil
+}
+
+// DeleteCategory removes a category. Downloads referencing it keep their
+// category_id but the category is gone.
+func (s *Store) DeleteCategory(ctx context.Context, id string) error {
+	if _, err := s.GetCategory(ctx, id); err != nil {
+		return err
+	}
+	_, err := s.db.ExecContext(ctx, `DELETE FROM categories WHERE id = ?`, id)
 	return err
 }
 
@@ -289,7 +372,7 @@ func scanDownload(sc scanner) (model.Download, error) {
 		status    string
 		createdNS int64
 	)
-	err := sc.Scan(&d.ID, &d.URL, &d.FinalURL, &d.Filename, &d.Dir, &d.Size, &ranges,
+	err := sc.Scan(&d.ID, &d.URL, &d.FinalURL, &d.Filename, &d.Dir, &d.CategoryID, &d.Size, &ranges,
 		&d.ETag, &d.LastModified, &status, &d.Error, &createdNS)
 	if err != nil {
 		return model.Download{}, err

@@ -125,6 +125,10 @@ func NewServer(mgr *manager.Manager, token string, origins ...string) *Server {
 	mux.HandleFunc("DELETE /api/downloads/{id}", s.withAuth(s.handleDelete))
 	mux.HandleFunc("GET /api/settings", s.withAuth(s.handleSettingsGet))
 	mux.HandleFunc("PUT /api/settings", s.withAuth(s.handleSettingsPut))
+	mux.HandleFunc("GET /api/categories", s.withAuth(s.handleCategoriesList))
+	mux.HandleFunc("POST /api/categories", s.withAuth(s.handleCategoriesAdd))
+	mux.HandleFunc("GET /api/categories/{id}", s.withAuth(s.handleCategoriesGet))
+	mux.HandleFunc("DELETE /api/categories/{id}", s.withAuth(s.handleCategoriesDelete))
 	mux.HandleFunc("GET /api/ws", s.handleWS)
 
 	s.srv.Handler = mux
@@ -431,6 +435,77 @@ func (s *Server) handleSettingsPut(w http.ResponseWriter, r *http.Request) {
 		PerDownloadLimit: current.PerDownloadLimit,
 		SaveInterval:     current.SaveInterval.String(),
 	})
+}
+
+// ---- Categories ----
+
+func (s *Server) handleCategoriesList(w http.ResponseWriter, r *http.Request) {
+	list, err := s.mgr.ListCategories(r.Context())
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: err.Error()})
+		return
+	}
+	if list == nil {
+		list = []model.Category{}
+	}
+	writeJSON(w, http.StatusOK, list)
+}
+
+type categoryRequest struct {
+	Name       string `json:"name"`
+	DefaultDir string `json:"defaultDir"`
+}
+
+func (s *Server) handleCategoriesAdd(w http.ResponseWriter, r *http.Request) {
+	var req categoryRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, errorResponse{Error: "invalid request body"})
+		return
+	}
+	if strings.TrimSpace(req.Name) == "" {
+		writeJSON(w, http.StatusBadRequest, errorResponse{Error: "name is required"})
+		return
+	}
+
+	c := model.Category{
+		ID:         manager.NewID(),
+		Name:       strings.TrimSpace(req.Name),
+		DefaultDir: strings.TrimSpace(req.DefaultDir),
+		CreatedAt:  time.Now().UTC(),
+	}
+	created, err := s.mgr.AddCategory(r.Context(), c)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusCreated, created)
+}
+
+func (s *Server) handleCategoriesGet(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	cat, err := s.mgr.GetCategory(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			writeJSON(w, http.StatusNotFound, errorResponse{Error: "not found"})
+		} else {
+			writeJSON(w, http.StatusInternalServerError, errorResponse{Error: err.Error()})
+		}
+		return
+	}
+	writeJSON(w, http.StatusOK, cat)
+}
+
+func (s *Server) handleCategoriesDelete(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if err := s.mgr.DeleteCategory(r.Context(), id); err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			writeJSON(w, http.StatusNotFound, errorResponse{Error: "not found"})
+		} else {
+			writeJSON(w, http.StatusInternalServerError, errorResponse{Error: err.Error()})
+		}
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // ---- WebSocket ----
