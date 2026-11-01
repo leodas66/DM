@@ -135,6 +135,34 @@ claim carrying a file path and function name. `docs/research/decisions.md`
 holds the adopted/rejected calls. See `AGENTS.md` for the licensing rules —
 they are not negotiable: read GPL code for design, never copy or translate it.
 
+## Code search
+
+`codebase-memory-mcp` is installed and indexed for this repo. Use it for
+structural code exploration instead of `grep`/`Glob`/`Read` when the question
+is about *relationships* — who calls what, what a function affects, where a
+route is wired, what changed.
+
+| Use this tool | When |
+|---|---|
+| `search_graph` | Find functions/classes/routes by name pattern (case-insensitive) |
+| `trace_call_path` | inbound/outbound call chains, risk-classified |
+| `get_architecture` | languages, packages, entry points, routes, hotspots |
+| `detect_changes` | git diff → affected symbols + blast radius |
+| `query_graph` | Cypher-like graph queries |
+| `search_code` | Text search inside indexed files (grep-like) |
+
+Prefer graph tools over file-by-file exploration: a single `search_graph` call
+returns what would take dozens of `grep`/`Read` calls, at ~500 tokens vs ~80K.
+
+The MCP server is registered in `kilo.json`, `.mcp.json`, and
+`~/.config/opencode/opencode.json` — all agents share one SQLite graph at
+`~/.cache/codebase-memory-mcp/codebase-memory.db`. It auto-syncs on file
+changes; reindex manually with:
+
+```
+codebase-memory-mcp cli index_repository '{"repo_path": "/home/vishwa/Projects/project1"}'
+```
+
 ## Commits
 
 - One commit per phase, message `phase N: <summary>`, body listing decisions
