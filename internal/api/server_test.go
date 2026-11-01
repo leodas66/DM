@@ -278,6 +278,7 @@ func TestRESTPauseResumeCancel(t *testing.T) {
 	defer h.close()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(100 * time.Millisecond)
 		w.Header().Set("Content-Length", "12")
 		w.Header().Set("Accept-Ranges", "bytes")
 		io.WriteString(w, "hello world!")
@@ -298,6 +299,13 @@ func TestRESTPauseResumeCancel(t *testing.T) {
 	}
 
 	got, _ := h.mgr.Get(context.Background(), d.ID)
+	for i := 0; i < 100; i++ {
+		if got.Status == model.StatusPaused {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+		got, _ = h.mgr.Get(context.Background(), d.ID)
+	}
 	if got.Status != model.StatusPaused {
 		t.Fatalf("expected paused, got %s", got.Status)
 	}

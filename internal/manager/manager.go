@@ -100,6 +100,26 @@ type item struct {
 	minSegment  int64 // min segment size for this download
 }
 
+// workContext is an immutable snapshot of everything the worker goroutine
+// needs. It is passed by value so the worker never touches shared state
+// concurrently with the Manager loop.
+type workContext struct {
+	id           string
+	url          string
+	segments     []model.Segment
+	filename     string
+	dir          string
+	size         int64
+	etag         string
+	lastModified string
+	headers      map[string]string
+	cookies      []model.Cookie
+	referrer     string
+	connections  int
+	minSegment   int64
+	perDL        *Bucket
+}
+
 // New builds a manager over st. It does no I/O until Start.
 func New(st *store.Store, settings Settings, client *http.Client) *Manager {
 	if client == nil {
@@ -359,37 +379,56 @@ func (m *Manager) startDownload(it *item) {
 	it.perDL = NewBucket(perDLLimit)
 	it.connections = connections
 	it.minSegment = minSegmentSize
-	it.d.Status = model.StatusProbing
-	it.d.Error = ""
+
+	// Snapshot every field the worker goroutine reads, so it never
+	// touches shared state concurrently with the loop.
+	d := it.d
+	wc := workContext{
+		id:           d.ID,
+		url:          d.URL,
+		segments:     d.Segments,
+		filename:     d.Filename,
+		dir:          d.Dir,
+		size:         d.Size,
+		etag:         d.ETag,
+		lastModified: d.LastModified,
+		headers:      it.creds.Headers,
+		cookies:      it.creds.Cookies,
+		referrer:     it.creds.Referrer,
+		connections:  connections,
+		minSegment:   minSegmentSize,
+		perDL:        it.perDL,
+	}
+
+	d.Status = model.StatusProbing
+	d.Error = ""
 	m.active++
 	m.wg.Add(1)
 	m.save(it)
-	go m.work(ctx, it)
+	go m.work(ctx, wc)
 	m.emit(model.EventStatusChanged, it.d)
 }
 
-func (m *Manager) work(ctx context.Context, it *item) {
+func (m *Manager) work(ctx context.Context, wc workContext) {
 	defer m.wg.Done()
-	// Snapshot: the loop may update it.d for the UI while this goroutine runs.
-	d := it.d
-	id := d.ID
+	id := wc.id
 
-	probeHeaders := make(map[string]string, len(it.creds.Headers)+2)
-	for k, v := range it.creds.Headers {
+	probeHeaders := make(map[string]string, len(wc.headers)+2)
+	for k, v := range wc.headers {
 		probeHeaders[k] = v
 	}
-	if len(it.creds.Cookies) > 0 {
-		parts := make([]string, 0, len(it.creds.Cookies))
-		for _, c := range it.creds.Cookies {
+	if len(wc.cookies) > 0 {
+		parts := make([]string, 0, len(wc.cookies))
+		for _, c := range wc.cookies {
 			parts = append(parts, c.Name+"="+c.Value)
 		}
 		probeHeaders["Cookie"] = strings.Join(parts, "; ")
 	}
-	if it.creds.Referrer != "" {
-		probeHeaders["Referer"] = it.creds.Referrer
+	if wc.referrer != "" {
+		probeHeaders["Referer"] = wc.referrer
 	}
 
-	info, err := probe.Probe(ctx, m.client, d.URL, probeHeaders)
+	info, err := probe.Probe(ctx, m.client, wc.url, probeHeaders)
 	if err != nil {
 		m.post(workerMsg{id: id, kind: msgDone, err: err})
 		return
@@ -397,26 +436,26 @@ func (m *Manager) work(ctx context.Context, it *item) {
 
 	m.post(workerMsg{id: id, kind: msgProbed, info: info})
 
-	segs := d.Segments
-	if validatorsChanged(d, info) {
+	segs := wc.segments
+	if validatorsChanged(model.Download{ID: wc.id, Size: wc.size, ETag: wc.etag, LastModified: wc.lastModified}, info) {
 		segs = nil
 	}
-	filename := d.Filename
+	filename := wc.filename
 	if filename == "" {
 		filename = info.Filename
 	}
-	dest := filepath.Join(d.Dir, filename)
+	dest := filepath.Join(wc.dir, filename)
 
 	cfg := download.Config{
-		URL:           d.URL,
+		URL:           wc.url,
 		FinalURL:      info.FinalURL,
 		Size:          info.Size,
 		AcceptsRanges: info.AcceptsRanges,
 		ETag:          info.ETag,
 		LastModified:  info.LastModified,
-		Headers:       it.creds.Headers,
-		Cookies:       it.creds.Cookies,
-		Referrer:      it.creds.Referrer,
+		Headers:       wc.headers,
+		Cookies:       wc.cookies,
+		Referrer:      wc.referrer,
 		Resume:        segs,
 	}
 
@@ -428,10 +467,10 @@ func (m *Manager) work(ctx context.Context, it *item) {
 	}()
 
 	err = download.Run(ctx, cfg, dest, download.Options{
-		Segments:       it.connections,
-		MinSegmentSize: it.minSegment,
+		Segments:       wc.connections,
+		MinSegmentSize: wc.minSegment,
 		Client:         m.client,
-		Limiter:        multiLimiter{m.global, it.perDL},
+		Limiter:        multiLimiter{m.global, wc.perDL},
 	}, events)
 	close(events)
 
