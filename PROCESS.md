@@ -139,6 +139,11 @@ they are not negotiable: read GPL code for design, never copy or translate it.
 
 - One commit per phase, message `phase N: <summary>`, body listing decisions
   and any deviations from `PLAN.md`.
+- **Review before committing.** After `make check` is green and before `git
+  commit`, re-read every changed file end-to-end and confirm: each hunk does
+  what it claims, no leftover debugging, no test weakened to pass, and all
+  non-obvious decisions are logged in `docs/DECISIONS.md`. If anything looks
+  wrong, fix it and re-run `make check` before committing.
 - Never commit `bin/`, `node_modules/`, `dist/`, `*.db`, or anything a
   `.gitignore` covers. If something new needs ignoring, add the rule.
 - Pre-commit runs `scripts/check.sh` via `.githooks/pre-commit`
