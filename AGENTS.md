@@ -1,10 +1,7 @@
 # AGENTS.md
 
 ## What this repo is
-A download manager daemon in Go, built phase by phase from `PLAN.md` (the
-spec — source of truth). Phases 0, R (research) and 1 (probe + segmented
-downloader + CLI) are done. Phase 2 (SQLite store, Manager, queue, resume) is
-next. `internal/api` and `internal/web` are still doc-only placeholders.
+A lightweight download manager with a standalone Go daemon, a native GTK4 desktop client, and a browser extension. The current implementation has completed the engine, persistence, API, extension, web UI and scheduling foundations. The approved migration is documented in `docs/ARCHITECTURE.md`.
 
 Read `PROCESS.md` before starting work. It defines how much you decide alone,
 when you must stop, and what counts as done. `docs/DECISIONS.md` records every
@@ -27,8 +24,7 @@ non-obvious call already made — check it before re-litigating a choice.
 
 ## Dependencies
 - Never add one without asking. Stdlib first.
-- Pre-approved: `modernc.org/sqlite` (Phase 2 only), Svelte + Vite in `ui/`,
-  esbuild in `extension/`.
+- Pre-approved: `modernc.org/sqlite` (existing), `github.com/diamondburned/gotk4/pkg` v0.4.1 for the isolated GTK4 desktop module, and esbuild in `extension/`.
 - `chi` and `cobra` are *not* needed — stdlib mux, `flag`, `log/slog`.
 - Module path is `github.com/vishwa/dm` (provisional, D001 in the decision
   log). Binary is `cmd/dm` → `dm`.
@@ -57,14 +53,19 @@ non-obvious call already made — check it before re-litigating a choice.
 - Never copy or translate code from GPL sources (aria2, Gopeed, XDM, old FDM)
   into this repo — that would relicense the project.
 - Do not decompile FDM 5.0+; observe behaviour only.
-- This project's license is undecided; ask before adding one or vendoring
-  anything copyleft.
+- This project is MIT-licensed (D013). Check each dependency's actual module
+  license; the gotk4 generated `pkg` module is MPL-2.0, while its generator is
+  AGPL-3.0 and must not be imported.
 
-## Layout (PLAN §4)
-`cmd/dm`, `internal/{model,probe,download,manager,store,api,web}`, `ui/`
-(Svelte), `extension/` (TypeScript MV3). The built UI is embedded via
-`go:embed` in `internal/web` and served at `/`. `scripts/mockserver` is a dev
-tool for manual checks (`-no-range`, `-flaky-every N`), see `TESTING.md`.
+## Layout
+`cmd/dm` and `cmd/dm-native-host` are Go executables. Core packages live in
+`internal/{model,probe,download,manager,store,app,api}`. `desktop/` is an
+isolated Go module for the GTK4 client (gotk4); it talks to the daemon over
+REST/WebSocket and must not be imported by the daemon module. `extension/` is
+a TypeScript MV3 extension using Native Messaging. The old `ui/`, Wails
+frontend and `internal/web` are migration targets and must not be deleted until
+the GTK client has feature parity and packaging/tests have moved. `scripts/mockserver`
+is a dev tool for manual checks (`-no-range`, `-flaky-every N`), see `TESTING.md`.
 
 ## Known local quirks
 - Git has no configured `user.name`/`user.email`; commits so far used a
