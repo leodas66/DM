@@ -2,12 +2,21 @@ name: ci
 
 on:
   push:
-    branches: [main]
+    branches:
+      - master
+      - architecture/native-gtk4
   pull_request:
+    branches:
+      - master
+
+permissions:
+  contents: read
 
 jobs:
   check:
+    name: Go checks
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
 
@@ -16,5 +25,5 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      - name: Verify
+      - name: Format, vet, race tests, and build
         run: ./scripts/check.sh
