@@ -2,12 +2,9 @@ name: ci
 
 on:
   push:
-    branches:
-      - main
-      - architecture/native-gtk4
+    branches: [main, master, architecture/native-gtk4]
   pull_request:
-    branches:
-      - main
+    branches: [main]
 
 permissions:
   contents: read
