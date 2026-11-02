@@ -19,10 +19,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
-          cache-dependency-path: |
-            ui/package.json
-            internal/gui/wails/frontend/package.json
 
       - name: Build embedded web UI
         working-directory: ui
