@@ -2,7 +2,7 @@ name: ci
 
 on:
   push:
-    branches: [main]
+    branches: [main, master, architecture/native-gtk4]
   pull_request:
 
 jobs:
@@ -15,6 +15,26 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            ui/package.json
+            internal/gui/wails/frontend/package.json
+
+      - name: Build embedded web UI
+        working-directory: ui
+        run: |
+          npm install --no-package-lock
+          npm run build
+
+      - name: Build Wails UI
+        working-directory: internal/gui/wails/frontend
+        run: |
+          npm install --no-package-lock
+          npm run build
 
       - name: Verify
         run: ./scripts/check.sh
