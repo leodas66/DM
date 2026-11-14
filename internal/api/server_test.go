@@ -867,3 +867,52 @@ func (h *harness) addDownloadWithCategory(t *testing.T, url string, categoryID s
 	}
 	return d
 }
+
+// TestBroadcastWithExternalServer covers the daemon wiring: cmd/dm serves this
+// handler through its own http.Server (wrapped by the embedded web UI) instead
+// of calling ListenAndServe, so it must start broadcasting explicitly. Without
+// that call /api/ws upgrades the connection and then never sends a frame.
+func TestBroadcastWithExternalServer(t *testing.T) {
+	dir := t.TempDir()
+	st, err := store.Open(filepath.Join(dir, "test.db"))
+	if err != nil {
+		t.Fatalf("store open: %v", err)
+	}
+	mgr := manager.New(st, manager.Settings{Dir: dir}, nil)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	if err := mgr.Start(ctx); err != nil {
+		t.Fatalf("manager start: %v", err)
+	}
+	defer mgr.Shutdown(context.Background())
+
+	s := NewServer(mgr, "secret-token")
+	s.Broadcast(ctx)
+
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	srv := &http.Server{Handler: s}
+	go srv.Serve(ln)
+	defer srv.Close()
+
+	h := &harness{srv: s, addr: ln.Addr().String(), mgr: mgr}
+	ws, release := dialWS(t, h, "secret-token", "http://"+h.addr)
+	defer release()
+
+	origin := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Length", "12")
+		io.WriteString(w, "hello world!")
+	}))
+	defer origin.Close()
+
+	d := h.addDownload(t, origin.URL, "secret-token")
+	ev, err := ws.readEventDeadline()
+	if err != nil {
+		t.Fatalf("read WS event: %v", err)
+	}
+	if ev.Type != model.EventAdded || ev.Download == nil || ev.Download.ID != d.ID {
+		t.Fatalf("event = %s %v, want added for %s", ev.Type, ev.Download, d.ID)
+	}
+}

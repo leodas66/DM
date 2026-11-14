@@ -95,6 +95,10 @@ type Server struct {
 	mu      sync.Mutex
 	origins map[string]bool
 	clients map[*wsClient]struct{}
+
+	// broadcastOnce guards the Manager subscription, so events are fanned out
+	// exactly once even when both the caller and ListenAndServe start it.
+	broadcastOnce sync.Once
 }
 
 // wsClient is one connected WebSocket subscriber.
@@ -203,9 +207,7 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 	s.ln = ln
 	s.mu.Unlock()
 
-	events, cancel := s.mgr.Events()
-	defer cancel()
-	go s.broadcastLoop(ctx, events)
+	s.Broadcast(ctx)
 
 	errCh := make(chan error, 1)
 	go func() {
@@ -238,6 +240,21 @@ func (s *Server) Addr() string {
 // Close stops the HTTP server without shutting down the Manager.
 func (s *Server) Close() error {
 	return s.srv.Close()
+}
+
+// Broadcast starts forwarding Manager events to connected WebSocket clients
+// until ctx is cancelled. ListenAndServe calls it; a caller that serves this
+// handler through its own http.Server (the daemon, which wraps it with the
+// embedded UI) must call it explicitly, or /api/ws connects but never receives
+// a frame. Extra calls are no-ops.
+func (s *Server) Broadcast(ctx context.Context) {
+	s.broadcastOnce.Do(func() {
+		events, cancel := s.mgr.Events()
+		go func() {
+			defer cancel()
+			s.broadcastLoop(ctx, events)
+		}()
+	})
 }
 
 // broadcastLoop reads Manager events and fans them out to WebSocket clients.

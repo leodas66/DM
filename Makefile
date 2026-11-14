@@ -1,6 +1,6 @@
 GO ?= go
 
-.PHONY: all build vet test check ci fmt hooks clean
+.PHONY: all build vet test check check-desktop ci fmt hooks clean
 
 all: check
 
@@ -20,6 +20,10 @@ fmt:
 # pre-commit hook run. Never claim green without this passing.
 check:
 	./scripts/check.sh
+
+# GTK4 client gate: separate module, needs cgo plus the GTK4 dev headers.
+check-desktop:
+	./scripts/check-desktop.sh
 
 ci: check
 

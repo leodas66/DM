@@ -134,4 +134,10 @@ browser extension's direct HTTP transport.
 7. Verify parity, then delete `ui/`, `internal/web/`, Wails sources and
    Svelte/Vite dependencies. Remove obsolete frontend build workflows and docs.
 
+Status 2026-11-14: step 2 is done (`internal/runtime`, published by
+`cmd/dm --serve`). Step 5 has started: the first GTK slice in `desktop/` covers
+the main window, filters, list, add, delete confirmation, and live progress;
+preferences and category management are still missing. Steps 1, 3, 4, 6, and 7
+are not started.
+
 Do not delete the old UI until step 5 and the packaging checks are green.

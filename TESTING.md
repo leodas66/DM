@@ -89,6 +89,29 @@ Then `./bin/dm -d /tmp/out -n 8 http://127.0.0.1:8099/big.bin`.
 | Login on a fresh user | daemon running, token created 0600 | not run — same | — |
 | Uninstall | no orphan config or data | not run — same | — |
 
+## GTK4 desktop client (first slice)
+
+Run against `scripts/mockserver` on `127.0.0.1:8099` with a real `dm --serve`
+daemon; the client used the published `$XDG_RUNTIME_DIR/dm/endpoint` and the
+existing 0600 token. Screenshots were taken of each state.
+
+| Check | Expected | Result | Date |
+|---|---|---|---|
+| `make check-desktop` | gofmt, vet, race tests, build green in `desktop/` | pass | 2026-11-14 |
+| Launch with daemon running | window opens, all downloads listed | pass — 7 seeded downloads with type icons, state icons, and counts | 2026-11-14 |
+| Endpoint discovery | client finds the ephemeral port without configuration | pass — daemon printed the endpoint; client connected on first try | 2026-11-14 |
+| Live WebSocket updates | progress, summary, and counts update without reload | pass — a running row advanced 23% → 57% and the header summary changed with it | 2026-11-14 |
+| Filters and counts | each of All/Active/Queued/Paused/Completed/Failed shows only matching rows | pass — verified per filter; All includes the canceled row, so it exceeds the sum of the other counts | 2026-11-14 |
+| Add dialog | URL, folder, optional name; submit adds a row | pass — submitted from the dialog, new row appeared in the list | 2026-11-14 |
+| Delete confirmation | modal names the file and destination; Cancel is default | pass — rendered for a failed row; Escape closes it | 2026-11-14 |
+| Offline state | clear message and a reconnect action | pass — "Cannot reach the DM daemon" with Retry when no endpoint exists | 2026-11-14 |
+| Empty collection | explanation plus one Add Download action | pass — "No downloads yet" with Add Download against a fresh daemon | 2026-11-14 |
+| Narrow window | sidebar collapses below 820 px, restores when widened | pass — 720 px hid it, 1024 px restored it, manual toggle overrides | 2026-11-14 |
+| Failed row | human-readable reason, raw error available | partial — short reason and error icon verified; the tooltip was not opened | 2026-11-14 |
+| Keyboard | Ctrl+N opens Add Download, Escape dismisses dialogs | pass | 2026-11-14 |
+| Light and dark appearance | readable in both without app colors | partial — verified under Breeze dark only | 2026-11-14 |
+| Confirm delete actually removes | file gone, row gone, daemon state updated | not run — the confirmation was opened but not confirmed | — |
+
 ## Deferred checks
 
 Record any check skipped, with the reason and the phase it was moved to.
@@ -108,3 +131,7 @@ Record any check skipped, with the reason and the phase it was moved to.
 | 3 | SIGTERM during download | Needs a real daemon process; `Manager.Shutdown` is covered indirectly |
 | 6 | `makepkg -si`, fresh-login, uninstall | Requires an Arch host; `makepkg`/`pacman` are unavailable in this environment |
 | 6 | Desktop app (Wails) launch and shutdown | Not in PLAN; needs a desktop session plus the Wails toolchain, so it is not part of `make check` |
+| GTK4 | Orca and GTK Inspector accessibility pass | Needs a full screen-reader session; labels and roles are implemented but not audited with Orca |
+| GTK4 | High-contrast and large-text appearance | Needs a separate GTK theme/settings session; no clipping was observed under the default font |
+| GTK4 | Light appearance | Only Breeze dark was available during the live check |
+| GTK4 | Confirm delete end-to-end | Destructive check on seeded files; the confirmation flow was rendered but not confirmed |

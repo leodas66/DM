@@ -26,6 +26,7 @@ import (
 	"github.com/vishwa/dm/internal/download"
 	"github.com/vishwa/dm/internal/manager"
 	"github.com/vishwa/dm/internal/probe"
+	"github.com/vishwa/dm/internal/runtime"
 	"github.com/vishwa/dm/internal/store"
 	"github.com/vishwa/dm/internal/web"
 )
@@ -104,8 +105,11 @@ func runServe() error {
 		return err
 	}
 
-	// Create the API server and wrap it with the embedded web UI.
+	// Create the API server and wrap it with the embedded web UI. This path
+	// serves with its own http.Server, so it must start event broadcasting
+	// itself; ListenAndServe is not called here.
 	apiSrv := api.NewServer(mgr, token)
+	apiSrv.Broadcast(ctx)
 	handler := web.Handler(apiSrv)
 
 	// Listen on loopback only.
@@ -114,8 +118,19 @@ func runServe() error {
 		return err
 	}
 	addr := ln.Addr().String()
+
+	// Publish the loopback address so local clients (GTK app, native host)
+	// can find the daemon without being told a port.
+	endpointPath, err := runtime.Publish(addr)
+	if err != nil {
+		ln.Close()
+		return err
+	}
+	defer runtime.Remove()
+
 	uiURL := fmt.Sprintf("http://%s/?token=%s", addr, token)
 	fmt.Printf("dm daemon listening on http://%s\n", addr)
+	fmt.Printf("Endpoint metadata: %s\n", endpointPath)
 	fmt.Printf("Bearer token: %s\n", token)
 	fmt.Printf("Opening UI at %s\n", uiURL)
 

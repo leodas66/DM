@@ -21,6 +21,9 @@ non-obvious call already made — check it before re-litigating a choice.
   after three failed fix attempts, not a fourth guess.
 - `make check` is the only accepted evidence a phase is green: gofmt, `go vet
   ./...`, `go test -race ./...`, `go build ./...`. Paste its real output.
+  Desktop-client changes also need `make check-desktop` (same gate inside the
+  separate `desktop/` module); it needs the GTK4 development headers, which CI
+  does not install yet.
 - Commit per green phase: `phase N: <what changed>`. Pre-commit runs the same
   gate — enable once per clone with `make hooks`. Never `--no-verify`.
 - Stop only for: a new dependency, the license, destructive actions, and the
@@ -71,17 +74,21 @@ non-obvious call already made — check it before re-litigating a choice.
   not be imported.
 
 ## Layout
-`cmd/dm` and `cmd/dm-native-host` are Go executables. Core packages live in
-`internal/{model,probe,download,manager,store,app,api}`. `desktop/` is an
-isolated Go module for the GTK4 client (gotk4); it talks to the daemon over
-REST/WebSocket and must not be imported by the daemon module. `extension/` is a
-TypeScript MV3 extension using Native Messaging. The old `ui/`, Wails frontend
-and `internal/web` are migration targets and must not be deleted until the GTK
-client has feature parity and packaging/tests have moved.
+`cmd/dm` is the daemon/CLI; `cmd/dm-native-host` is planned but not created yet.
+Core packages live in `internal/{model,probe,download,manager,store,api}` plus
+`internal/runtime` (daemon endpoint discovery for local clients), with
+`internal/app` still to come. `desktop/` is an isolated Go module for the GTK4
+client (gotk4); it talks to the daemon over REST/WebSocket and must not be
+imported by the daemon module. `extension/` is a TypeScript MV3 extension using
+Native Messaging. The old `ui/`, Wails frontend and `internal/web` are migration
+targets and must not be deleted until the GTK client has feature parity and
+packaging/tests have moved.
 
-Migration status: only the design documents (`docs/ARCHITECTURE.md`,
-`docs/GTK4-DESIGN-SPEC.md`) exist so far — `desktop/`, `cmd/dm-native-host` and
-`internal/app` are not created yet.
+Migration status: the first GTK4 slice exists in `desktop/` (main window, filter
+sidebar, virtualized list, Add dialog, delete confirmation, live WebSocket
+updates) and the daemon publishes `$XDG_RUNTIME_DIR/dm/endpoint` so clients find
+its ephemeral port. Not built yet: `cmd/dm-native-host`, `internal/app`,
+preferences, and category management in the client.
 
 While they remain, both embedded trees (`internal/web/dist` and
 `internal/gui/wails/frontend/dist`) are gitignored except for a tracked
