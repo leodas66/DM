@@ -106,7 +106,7 @@ export function buildDownloadPayload(
   item: chrome.downloads.DownloadItem,
   cookies: DownloadCookie[] = [],
 ): DownloadRequest {
-  const headers: Record<string, string> = { 'User-Agent': 'dm/0.2.0' }
+  const headers: Record<string, string> = { 'User-Agent': 'dm/0.2.1' }
   const referrer = item.referrer || ''
   if (referrer) headers['Referer'] = referrer
 

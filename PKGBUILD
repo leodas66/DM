@@ -1,6 +1,6 @@
 # Maintainer: Agent V <agent-v@kilo.local>
 pkgname=dm
-pkgver=0.2.0
+pkgver=0.2.1
 pkgrel=1
 pkgdesc="Lightweight segmented download manager: local daemon, GTK4 client and browser host"
 arch=('x86_64' 'aarch64')
