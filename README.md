@@ -14,7 +14,7 @@ downloading, and a native GTK4 desktop client.
 ## Install (Arch)
 
 ```sh
-git clone https://github.com/VDev45/DM.git
+git clone https://github.com/leodas66/DM.git
 cd dm
 makepkg -si
 ```

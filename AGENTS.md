@@ -42,6 +42,10 @@ non-obvious call already made — check it before re-litigating a choice.
 - `chi` and `cobra` are *not* needed — stdlib mux, `flag`, `log/slog`.
 - Module path is `github.com/vishwa/dm` (provisional, D001 in the decision
   log). Binary is `cmd/dm` → `dm`.
+- The public repository is `https://github.com/leodas66/DM` (D036); `origin`
+  points there and the PKGBUILD source and README clone command use it. The
+  module path does not match that URL on purpose — do not rename it as a
+  drive-by change.
 
 ## Architecture invariants (the mistakes that are easy to make here)
 - The Manager owns all download state and is the **only** writer to the store.
