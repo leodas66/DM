@@ -1,15 +1,27 @@
-import { getSettings, saveSettings } from './storage'
-import { sendToDaemon } from './types'
+import { buildDownloadPayload, sendToHost } from './types'
+
+const api = (globalThis as unknown as { browser?: typeof chrome }).browser ?? chrome
 
 const form = document.getElementById('form') as HTMLFormElement
 const urlInput = document.getElementById('url') as HTMLInputElement
 const sendBtn = document.getElementById('send') as HTMLButtonElement
 const openOptions = document.getElementById('openOptions') as HTMLButtonElement
 const status = document.getElementById('status') as HTMLElement
+const hostStatus = document.getElementById('hostStatus') as HTMLElement
 
 function setStatus(text: string, ok: boolean) {
   status.textContent = text
   status.className = `status ${ok ? 'ok' : 'err'}`
+}
+
+async function checkHost() {
+  hostStatus.textContent = 'Checking the DM daemon\u2026'
+  const response = await sendToHost({ command: 'ping' })
+  if (response.ok) {
+    hostStatus.textContent = `DM daemon ready (host ${response.version || 'unknown'}).`
+    return
+  }
+  hostStatus.textContent = response.error || 'The DM daemon is not reachable.'
 }
 
 form.addEventListener('submit', async (e) => {
@@ -18,35 +30,22 @@ form.addEventListener('submit', async (e) => {
   if (!url) return
 
   sendBtn.disabled = true
-  setStatus('Sending to daemon…', false)
+  setStatus('Sending to DM\u2026', true)
 
-  try {
-    const settings = await getSettings()
-    if (!settings.port || !settings.token) {
-      setStatus('Daemon not configured — open Settings.', false)
-      return
-    }
+  const item = { url, referrer: '', filename: '', mime: '' } as chrome.downloads.DownloadItem
+  const response = await sendToHost(buildDownloadPayload(item))
+  sendBtn.disabled = false
 
-    const res = await sendToDaemon(settings, '/api/downloads', {
-      url,
-      referrer: '',
-      headers: { 'User-Agent': 'dm/0.1.0-dev' },
-      cookies: [],
-    })
-
-    if (res.ok) {
-      setStatus('Download added to dm.', true)
-      urlInput.value = ''
-    } else {
-      setStatus(`Daemon rejected (${res.status}).`, false)
-    }
-  } catch {
-    setStatus('Daemon unreachable. Is dm running?', false)
-  } finally {
-    sendBtn.disabled = false
+  if (response.ok) {
+    setStatus('Download added to DM.', true)
+    urlInput.value = ''
+    return
   }
+  setStatus(response.error || 'DM rejected the download.', false)
 })
 
 openOptions.addEventListener('click', () => {
-  void chrome.runtime.openOptionsPage()
+  void api.runtime.openOptionsPage()
 })
+
+void checkHost()

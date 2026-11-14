@@ -1,27 +1,26 @@
 {
   "manifest_version": 3,
-  "name": "dm",
-  "version": "0.1.0-dev",
-  "description": "Send downloads to the local dm daemon.",
+  "name": "DM",
+  "version": "0.2.0",
+  "description": "Send browser downloads to the DM download manager.",
   "permissions": [
     "downloads",
     "storage",
     "contextMenus",
     "tabs",
-    "cookies"
+    "cookies",
+    "nativeMessaging"
   ],
-  "host_permissions": [
-    "<all_urls>"
-  ],
+  "host_permissions": ["<all_urls>"],
   "background": {
-    "service_worker": "dist/background.js"
+    "service_worker": "background.js"
   },
   "action": {
-    "default_popup": "dist/popup.html",
-    "default_title": "dm"
+    "default_popup": "popup.html",
+    "default_title": "DM"
   },
   "options_ui": {
-    "page": "dist/options.html",
+    "page": "options.html",
     "open_in_tab": true
   }
 }

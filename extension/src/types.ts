@@ -1,25 +1,36 @@
-export interface DaemonSettings {
-  port: number          // 0 = not configured
-  token: string         // bearer token from ~/.config/dm/token
-  minSize: number       // bytes; 0 = capture every download
-  allowHosts: string[]  // empty = allow every host
-  denyHosts: string[]   // empty = deny no host
+// Pure helpers shared by the background worker, popup and options page.
+// Nothing here talks to the daemon directly: the extension reaches it only
+// through the Native Messaging host (io.github.vishwa.dm).
+
+export interface CaptureSettings {
+  enabled: boolean
+  minSize: number
+  allowHosts: string[]
+  denyHosts: string[]
 }
 
-export const DEFAULT_SETTINGS: DaemonSettings = {
-  port: 0,
-  token: '',
-  minSize: 0,
-  allowHosts: [],
-  denyHosts: [],
+export const NATIVE_HOST = 'io.github.vishwa.dm'
+
+export interface DownloadCookie {
+  name: string
+  value: string
 }
 
 export interface DownloadRequest {
+  command: 'add'
   url: string
   referrer?: string
   filename?: string
   headers: Record<string, string>
-  cookies: Array<{ name: string; value: string }>
+  cookies: DownloadCookie[]
+}
+
+export interface HostResponse {
+  ok: boolean
+  id?: string
+  filename?: string
+  version?: string
+  error?: string
 }
 
 export interface CaptureDecision {
@@ -27,17 +38,13 @@ export interface CaptureDecision {
   reason?: string
 }
 
-export function daemonBaseUrl(settings: DaemonSettings): string {
-  return `http://127.0.0.1:${settings.port}`
-}
+// sendNativeMessage is injectable so the request/response handling is testable
+// without a browser.
+export type NativeSend = (host: string, message: object) => Promise<unknown>
 
-export function isDaemonUrl(url: string, settings: DaemonSettings): boolean {
-  if (!settings.port) return false
-  try {
-    return url.startsWith(daemonBaseUrl(settings))
-  } catch {
-    return false
-  }
+export function ext(): typeof chrome {
+  const scope = globalThis as unknown as { browser?: typeof chrome }
+  return scope.browser ?? chrome
 }
 
 export function hostOf(url: string): string | null {
@@ -64,19 +71,22 @@ export function mimeOf(item: chrome.downloads.DownloadItem): string {
   return (item.mime || '').toLowerCase()
 }
 
-export function shouldCapture(item: chrome.downloads.DownloadItem, settings: DaemonSettings): CaptureDecision {
-  // Never capture the daemon's own requests (avoid a loop).
-  if (isDaemonUrl(item.url, settings)) {
-    return { capture: false, reason: 'daemon url' }
-  }
+// baseNameOf keeps only the last path segment. Chrome reports the absolute
+// destination path for a download; the daemon expects a filename, and sending
+// a path would be a directory traversal waiting to be sanitized away.
+export function baseNameOf(path: string): string {
+  const trimmed = path.trim()
+  if (!trimmed) return ''
+  const parts = trimmed.replace(/\\/g, '/').split('/')
+  return parts[parts.length - 1] || ''
+}
 
-  // Minimum size filter.
+export function shouldCapture(item: chrome.downloads.DownloadItem, settings: CaptureSettings): CaptureDecision {
   const size = item.fileSize ?? item.totalBytes ?? 0
   if (settings.minSize > 0 && size > 0 && size < settings.minSize) {
     return { capture: false, reason: 'below min size' }
   }
 
-  // Host allow / deny list.
   const host = hostOf(item.url)
   if (host) {
     if (settings.denyHosts.includes(host)) {
@@ -90,39 +100,74 @@ export function shouldCapture(item: chrome.downloads.DownloadItem, settings: Dae
   return { capture: true }
 }
 
-export function buildDownloadPayload(item: chrome.downloads.DownloadItem, settings: DaemonSettings): DownloadRequest {
-  const headers: Record<string, string> = {}
-  const cookies: Array<{ name: string; value: string }> = []
-
-  // User-Agent default.
-  headers['User-Agent'] = 'dm/0.1.0-dev'
-
+// buildDownloadPayload is the message the host forwards to the daemon. It
+// carries the browser's own referrer and cookies so protected downloads work.
+export function buildDownloadPayload(
+  item: chrome.downloads.DownloadItem,
+  cookies: DownloadCookie[] = [],
+): DownloadRequest {
+  const headers: Record<string, string> = { 'User-Agent': 'dm/0.2.0' }
   const referrer = item.referrer || ''
   if (referrer) headers['Referer'] = referrer
 
   return {
+    command: 'add',
     url: item.url,
     referrer,
-    filename: item.filename || undefined,
+    filename: baseNameOf(item.filename || '') || undefined,
     headers,
     cookies,
   }
 }
 
-export async function sendToDaemon(
-  settings: DaemonSettings,
-  path: string,
-  body: unknown,
-  fetchImpl: typeof fetch = globalThis.fetch,
-): Promise<Response> {
-  const url = `${daemonBaseUrl(settings)}/api${path}`
-  return fetchImpl(url, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${settings.token}`,
-      'Content-Type': 'application/json',
-      Origin: `http://127.0.0.1:${settings.port}`,
-    },
-    body: JSON.stringify(body),
-  })
+export type CookieGetter = (details: { url: string }) => Promise<Array<{ name: string; value: string }>>
+
+// collectCookies reads the cookies the browser would send to this URL. A
+// failure is not fatal: the download can still be attempted without them.
+export async function collectCookies(
+  url: string,
+  get: CookieGetter = (details) => ext().cookies.getAll(details),
+): Promise<DownloadCookie[]> {
+  try {
+    const list = await get({ url })
+    const out: DownloadCookie[] = []
+    for (const c of list) {
+      if (c.name && typeof c.value === 'string') out.push({ name: c.name, value: c.value })
+    }
+    return out
+  } catch {
+    return []
+  }
+}
+
+export async function sendToHost(
+  message: object,
+  send: NativeSend = (host, msg) => ext().runtime.sendNativeMessage(host, msg),
+): Promise<HostResponse> {
+  try {
+    const raw = await send(NATIVE_HOST, message)
+    if (!raw || typeof raw !== 'object') {
+      return { ok: false, error: 'The DM native host sent an unreadable reply.' }
+    }
+    const response = raw as HostResponse
+    return {
+      ok: response.ok === true,
+      id: response.id,
+      filename: response.filename,
+      version: response.version,
+      error: response.error,
+    }
+  } catch (err) {
+    return { ok: false, error: describeHostError(err) }
+  }
+}
+
+// describeHostError turns the browser's protocol error into something a user
+// can act on. Chrome and Firefox use different wording for a missing host.
+export function describeHostError(err: unknown): string {
+  const text = err instanceof Error ? err.message : String(err)
+  if (/not found|not registered|No such native application/i.test(text)) {
+    return 'The DM native host is not installed. See README.md (Native Messaging setup).'
+  }
+  return `Could not reach the DM native host: ${text}`
 }

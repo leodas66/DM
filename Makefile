@@ -6,6 +6,7 @@ all: check
 
 build:
 	$(GO) build -o bin/dm ./cmd/dm
+	$(GO) build -o bin/dm-native-host ./cmd/dm-native-host
 
 # GTK4 client: separate module, needs cgo plus the GTK4 dev headers.
 desktop:

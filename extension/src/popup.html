@@ -3,13 +3,13 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>dm</title>
+    <title>DM</title>
     <link rel="stylesheet" href="popup.css" />
   </head>
   <body>
     <div class="container">
-      <h1>dm</h1>
-      <p class="muted">Add a download to the local daemon.</p>
+      <h1>DM</h1>
+      <p class="muted">Add a download to the local DM daemon.</p>
       <form id="form">
         <label>URL</label>
         <input id="url" type="url" placeholder="https://example.com/file.iso" required />
@@ -19,6 +19,7 @@
         </div>
       </form>
       <div id="status" class="status"></div>
+      <p id="hostStatus" class="muted small"></p>
     </div>
     <script src="popup.js"></script>
   </body>

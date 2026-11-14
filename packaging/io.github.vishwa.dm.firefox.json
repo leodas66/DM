@@ -1,0 +1,7 @@
+{
+  "name": "io.github.vishwa.dm",
+  "description": "DM download manager native host",
+  "path": "/usr/bin/dm-native-host",
+  "type": "stdio",
+  "allowed_extensions": ["dm@vishwa.github.io"]
+}

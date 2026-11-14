@@ -63,14 +63,23 @@ Then `./bin/dm -d /tmp/out -n 8 http://127.0.0.1:8099/big.bin`.
 | WebSocket client receives added/progress/status/removed | in order, valid JSON | pass (automated: `TestWSReceivesEvents`; auth by `TestWSRequiresAuth`) | 2026-11-14 |
 | SIGTERM during download | state persisted, process exits cleanly | not run — needs a real daemon process; graceful shutdown is only covered indirectly by `Manager.Shutdown` | — |
 
-## Phase 4: extension
+## Phase 4: extension and native host
 
 | Check | Expected | Result | Date |
 |---|---|---|---|
-| Cookie-protected download, Chrome | daemon gets file, browser download canceled | | |
-| Cookie-protected download, Firefox | same | | |
-| Daemon stopped | browser download proceeds normally | | |
-| Below minimum-size filter | browser handles it, daemon untouched | | |
+| Native Messaging framing | round trip, EOF, empty and oversize frames rejected | pass (automated: `TestMessageRoundTrip`, `TestReadMessageEOF`, `TestReadMessageRejectsEmpty`, `TestReadMessageRejectsOversize`, `TestReadMessageRejectsShortBody`) | 2026-11-15 |
+| Host forwards a download | `add` posts to `/api/downloads` with the bearer token, referrer, headers and cookies | pass (automated: `TestAddForwardsCredentialsAndPayload`) | 2026-11-15 |
+| Host input validation | `file://`, `ftp://`, `javascript:`, empty and hostless URLs never reach the daemon | pass (automated: `TestAddRejectsNonHTTPURLs`) | 2026-11-15 |
+| Host sanitizes headers | CR/LF header names or values and empty names are dropped | pass (automated: `TestAddStripsDangerousHeaders`) | 2026-11-15 |
+| Host error reporting | daemon 4xx/5xx, unreadable body, missing endpoint and missing token produce a message the popup can show | pass (automated: `TestAddSurfacesDaemonError`, `TestAddFallsBackToStatusWhenBodyIsNotJSON`, `TestAddReportsDaemonUnavailable`, `TestAddReportsMissingToken`) | 2026-11-15 |
+| Framed end-to-end host run | `ping`, `add`, a rejected `file://` URL and an unknown command over real stdin/stdout | pass — frames only on stdout, exit 0, downloaded file matched the fixture SHA-256 | 2026-11-15 |
+| Host manifests | `-manifest chrome -extension-id …` and `-manifest firefox` produce the expected allowlists; unknown browsers and a missing ID fail | pass — Chrome origin `chrome-extension://<id>/`, Firefox `dm@vishwa.github.io` | 2026-11-15 |
+| Capture rules | size, allow and deny filters, referrer and filename payload | pass (automated: 17 tests in `extension/src/types.test.ts`) | 2026-11-15 |
+| Extension build | one bundle produces loadable `dist/chrome` and `dist/firefox` | pass — both manifests and assets present; `npm run lint` clean | 2026-11-15 |
+| Cookie-protected download, Chrome | daemon gets file, browser download canceled | not run — no Chrome in this environment; see deferred | — |
+| Cookie-protected download, Firefox | same | not run — no Firefox in this environment; see deferred | — |
+| Daemon stopped | browser download proceeds normally | not run — same | — |
+| Below minimum-size filter | browser handles it, daemon untouched | not run — same | — |
 
 ## Phase 5: UI
 
@@ -141,3 +150,6 @@ Record any check skipped, with the reason and the phase it was moved to.
 | GTK4 | Confirm delete end-to-end | Destructive check on seeded files; the confirmation flow was rendered but not confirmed |
 | 6 | `makepkg -si` installs daemon, client, unit, desktop entry, icon | `makepkg`/`pacman` are unavailable here; `bash -n PKGBUILD`, `desktop-file-validate`, and the source tag were checked instead |
 | 6 | `dm --serve` without `--open-ui` opens no browser and prints no token | needs a fresh terminal run after installing the package |
+| 4 | Extension loaded in Chrome | No Chrome available; the build output and host protocol are tested, the browser UI is not |
+| 4 | Extension loaded in Firefox | No Firefox available; same |
+| 4 | Chrome per-user host manifest in place | The extension ID only exists after loading the extension, so this is a manual install step |

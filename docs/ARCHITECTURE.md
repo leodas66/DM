@@ -134,11 +134,15 @@ browser extension's direct HTTP transport.
 7. Verify parity, then delete `ui/`, `internal/web/`, Wails sources and
    Svelte/Vite dependencies. Remove obsolete frontend build workflows and docs.
 
-Status 2026-11-14: step 2 is done (`internal/runtime`, published by
-`cmd/dm --serve`). Step 3 is done for the main surface: the GTK client in
-`desktop/` covers the main window, filters, list, add, delete confirmation, live
-progress, preferences, and category management. Retry is still missing because
-the API has no endpoint for it. Steps 1, 2, 4, 6, and 7 are not started; step 4
-(removing the legacy web UI) stays blocked until parity is complete.
+Status 2026-11-15: steps 2, 3, and 4 are done. `internal/runtime` publishes the
+endpoint, `cmd/dm-native-host` plus `internal/nativehost` implement framing and
+`add`/`ping` forwarding with tests, and the extension captures downloads through
+the host with no port or token of its own. The browser checks themselves are
+still manual (see `TESTING.md`). Step 5 is done for the main surface: the GTK
+client covers the window, filters, list, add, delete confirmation, live progress,
+preferences, and category management; retry is missing because the API has no
+endpoint for it. Step 6 ships daemon, host, and client in one package. Step 1
+(`internal/app` services) and step 7 (removing the legacy UI) are not started;
+step 7 stays blocked until parity is complete.
 
 Do not delete the old UI until step 5 and the packaging checks are green.

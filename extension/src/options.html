@@ -3,20 +3,22 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>dm settings</title>
+    <title>DM settings</title>
     <link rel="stylesheet" href="options.css" />
   </head>
   <body>
     <div class="container">
-      <h1>dm settings</h1>
-      <p class="muted">Configure the connection to the local dm daemon.</p>
+      <h1>DM settings</h1>
+      <p class="muted">
+        Downloads are sent to the DM daemon through a Native Messaging host. No
+        port or token is configured here: the host reads the daemon's runtime
+        endpoint and token file itself.
+      </p>
       <form id="form">
-        <label>Daemon port</label>
-        <input id="port" type="number" min="1" max="65535" placeholder="e.g. 8080" />
-
-        <label>Bearer token</label>
-        <input id="token" type="password" placeholder="from ~/.config/dm/token" />
-        <p class="hint">Token is stored in Chrome's sync storage, never sent anywhere except the local daemon.</p>
+        <label class="check">
+          <input id="enabled" type="checkbox" />
+          Capture browser downloads with DM
+        </label>
 
         <label>Minimum file size to capture (bytes, 0 = all)</label>
         <input id="minSize" type="number" min="0" placeholder="0" />
@@ -29,6 +31,7 @@
 
         <div class="row">
           <button type="submit">Save</button>
+          <button type="button" id="test">Test connection</button>
           <button type="button" id="clear">Clear</button>
         </div>
       </form>

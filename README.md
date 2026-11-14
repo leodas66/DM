@@ -28,9 +28,11 @@ This installs:
 |---|---|
 | `/usr/bin/dm` | daemon and one-shot CLI |
 | `/usr/bin/dm-desktop` | GTK4 desktop client |
+| `/usr/bin/dm-native-host` | Native Messaging host for the browser extension |
 | `/usr/lib/systemd/user/dm.service` | per-user daemon unit |
 | `/usr/share/applications/io.github.vishwa.DM.desktop` | application entry |
 | `/usr/share/icons/hicolor/scalable/apps/io.github.vishwa.DM.svg` | icon |
+| `/usr/lib/mozilla/native-messaging-hosts/io.github.vishwa.dm.json` | system-wide Firefox host manifest (allowlists `dm@vishwa.github.io`) |
 
 Then start the daemon for your user session:
 
@@ -58,8 +60,8 @@ Requirements: Go (see `go.mod`), and for the client the GTK4 development files
 (Arch: `gtk4`; Debian/Ubuntu: `libgtk-4-dev`).
 
 ```sh
-make build                       # bin/dm
-cd desktop && go build -o ../bin/dm-desktop .
+make build                       # bin/dm and bin/dm-native-host
+make desktop                     # bin/dm-desktop (GTK4)
 ```
 
 Run the daemon in a terminal with `./bin/dm --serve`, then `./bin/dm-desktop`.
@@ -85,14 +87,35 @@ make check-desktop    # desktop module: same gate, needs the GTK4 headers
 `make check` deliberately does not enter `desktop/` because that module needs
 cgo and GTK. CI runs both jobs.
 
-The browser extension in `extension/` still talks to the daemon over HTTP and
-is not part of this release; the approved design routes it through a Native
-Messaging host (`cmd/dm-native-host`), which is not implemented yet. Downloads
-added by hand work without it.
+## Browser integration
+
+The extension in `extension/` sends browser downloads to the daemon through
+`dm-native-host`, which speaks Native Messaging on stdin/stdout and forwards
+`add`/`ping` to the authenticated loopback API. The extension holds no port and
+no token.
+
+```sh
+cd extension && npm install && npm run build   # dist/chrome and dist/firefox
+# then load dist/chrome unpacked, or dist/firefox as a temporary add-on
+```
+
+Chrome needs a per-user host manifest because it allowlists the extension ID,
+which is only known after the extension is loaded:
+
+```sh
+dm-native-host -manifest chrome -extension-id <id> \
+  > ~/.config/google-chrome/NativeMessagingHosts/io.github.vishwa.dm.json
+```
+
+Firefox is already covered by the packaged system manifest. The host refuses
+non-`http(s)` URLs and strips CR/LF from forwarded headers and cookie names.
+See `extension/README.md` for loading, troubleshooting, and settings.
 
 ## Layout
 
 - `cmd/dm`: daemon and CLI.
+- `cmd/dm-native-host`: Native Messaging host for the browser extension.
+- `internal/nativehost`: framing and API forwarding for that host.
 - `internal/`: probe, segmented downloader, manager, SQLite store, API, runtime
   endpoint discovery.
 - `desktop/`: separate Go module with the GTK4 client.

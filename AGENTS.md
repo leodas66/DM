@@ -74,7 +74,8 @@ non-obvious call already made — check it before re-litigating a choice.
   not be imported.
 
 ## Layout
-`cmd/dm` is the daemon/CLI; `cmd/dm-native-host` is planned but not created yet.
+`cmd/dm` is the daemon/CLI; `cmd/dm-native-host` is the browser's Native
+Messaging host.
 Core packages live in `internal/{model,probe,download,manager,store,api}` plus
 `internal/runtime` (daemon endpoint discovery for local clients), with
 `internal/app` still to come. `desktop/` is an isolated Go module for the GTK4
@@ -84,11 +85,14 @@ Native Messaging. The old `ui/`, Wails frontend and `internal/web` are migration
 targets and must not be deleted until the GTK client has feature parity and
 packaging/tests have moved.
 
-Migration status: the first GTK4 slice exists in `desktop/` (main window, filter
+Migration status: the GTK4 client in `desktop/` covers the main window, filter
 sidebar, virtualized list, Add dialog, delete confirmation, live WebSocket
-updates) and the daemon publishes `$XDG_RUNTIME_DIR/dm/endpoint` so clients find
-its ephemeral port, plus preferences and category management. Not built yet:
-`cmd/dm-native-host`, `internal/app`, and retry for failed downloads.
+updates, preferences, and category management; the daemon publishes
+`$XDG_RUNTIME_DIR/dm/endpoint` so clients find its ephemeral port. The browser
+side exists: `cmd/dm-native-host` plus `internal/nativehost` implement Native
+Messaging (`add`/`ping`), and `extension/` no longer holds a port or token. Not
+built yet: `internal/app`, retry for failed downloads, clipboard link capture,
+and the tray icon.
 
 While they remain, both embedded trees (`internal/web/dist` and
 `internal/gui/wails/frontend/dist`) are gitignored except for a tracked
