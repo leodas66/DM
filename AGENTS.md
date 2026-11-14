@@ -1,10 +1,14 @@
 # AGENTS.md
 
 ## What this repo is
-A download manager daemon in Go, built phase by phase from `PLAN.md` (the
-spec — source of truth). Phases 0, R (research) and 1 (probe + segmented
-downloader + CLI) are done. Phase 2 (SQLite store, Manager, queue, resume) is
-next. `internal/api` and `internal/web` are still doc-only placeholders.
+A lightweight download manager: a standalone Go daemon (engine, persistence,
+HTTP API + WebSocket events, scheduling, categories, packaging), a browser
+extension, and desktop clients. Phases 0, R and 1–6 of `PLAN.md` are committed;
+a Wails desktop wrapper (`internal/gui/wails`) was added after Phase 6 and is
+not in `PLAN.md`. The approved migration to a native GTK4 client and Native
+Messaging is documented in `docs/ARCHITECTURE.md`. `TESTING.md` holds the check
+matrix and what is still manual; `docs/DECISIONS.md` holds the open provisional
+calls.
 
 Read `PROCESS.md` before starting work. It defines how much you decide alone,
 when you must stop, and what counts as done. `docs/DECISIONS.md` records every
@@ -27,8 +31,12 @@ non-obvious call already made — check it before re-litigating a choice.
 
 ## Dependencies
 - Never add one without asking. Stdlib first.
-- Pre-approved: `modernc.org/sqlite` (Phase 2 only), Svelte + Vite in `ui/`,
-  esbuild in `extension/`.
+- Pre-approved: `modernc.org/sqlite`, Svelte + Vite in `ui/` and
+  `internal/gui/wails/frontend`, esbuild in `extension/`, and
+  `github.com/diamondburned/gotk4/pkg` v0.4.1 for the isolated GTK4 desktop
+  module.
+- Already in the tree: Wails v2 for the desktop wrapper (D023), added after the
+  planned phases. Ask before adding anything else.
 - `chi` and `cobra` are *not* needed — stdlib mux, `flag`, `log/slog`.
 - Module path is `github.com/vishwa/dm` (provisional, D001 in the decision
   log). Binary is `cmd/dm` → `dm`.
@@ -57,21 +65,43 @@ non-obvious call already made — check it before re-litigating a choice.
 - Never copy or translate code from GPL sources (aria2, Gopeed, XDM, old FDM)
   into this repo — that would relicense the project.
 - Do not decompile FDM 5.0+; observe behaviour only.
-- This project's license is undecided; ask before adding one or vendoring
-  anything copyleft.
+- This project is MIT-licensed (D013); do not add copyleft code or
+  dependencies. Check each dependency's actual module license; the gotk4
+  generated `pkg` module is MPL-2.0, while its generator is AGPL-3.0 and must
+  not be imported.
 
-## Layout (PLAN §4)
-`cmd/dm`, `internal/{model,probe,download,manager,store,api,web}`, `ui/`
-(Svelte), `extension/` (TypeScript). The built UI is embedded via
-`go:embed` in `internal/web` and served at `/`. `scripts/mockserver` is a dev
-tool for manual checks (`-no-range`, `-flaky-every N`), see `TESTING.md`.
+## Layout
+`cmd/dm` and `cmd/dm-native-host` are Go executables. Core packages live in
+`internal/{model,probe,download,manager,store,app,api}`. `desktop/` is an
+isolated Go module for the GTK4 client (gotk4); it talks to the daemon over
+REST/WebSocket and must not be imported by the daemon module. `extension/` is a
+TypeScript MV3 extension using Native Messaging. The old `ui/`, Wails frontend
+and `internal/web` are migration targets and must not be deleted until the GTK
+client has feature parity and packaging/tests have moved.
+
+Migration status: only the design documents (`docs/ARCHITECTURE.md`,
+`docs/GTK4-DESIGN-SPEC.md`) exist so far — `desktop/`, `cmd/dm-native-host` and
+`internal/app` are not created yet.
+
+While they remain, both embedded trees (`internal/web/dist` and
+`internal/gui/wails/frontend/dist`) are gitignored except for a tracked
+`.gitkeep`, so `make check` works on a fresh clone without `npm install`.
+`internal/web` embeds `all:dist` and serves a "UI not built" page when
+`dist/index.html` is absent instead of panicking. Build the real bundles with
+`npm run build` in `ui/` or in the desktop frontend directory; each build
+script re-creates the `.gitkeep` that vite's `emptyOutDir` deletes.
+
+`scripts/mockserver` is a dev tool for manual checks (`-no-range`,
+`-flaky-every N`), see `TESTING.md`.
 
 ## Known local quirks
-- Git has no configured `user.name`/`user.email`; commits so far used a
-  placeholder identity (D009). Fix before the author takes ownership of
-  history: `git config user.name … && git config user.email … && git commit
-  --amend --reset-author --no-edit`.
+- Git identity is still a placeholder (`Agent V <agent-v@kilo.local>`, D009).
+  Before the author takes ownership of history, set the real identity and
+  rewrite the author: `git config user.name … && git config user.email … &&
+  git commit --amend --reset-author --no-edit` (or filter the whole history).
 - Go toolchain is `go1.27.3` (custom build); `go.mod` pins it.
+- `go get` needs `GOPROXY=https://goproxy.io,direct` here; the default
+  `proxy.golang.org` times out.
 
 ## Code search
 `codebase-memory-mcp` is installed and indexed for this repo. Use it for
@@ -89,7 +119,7 @@ route is wired, what changed.
 | `search_code` | Text search inside indexed files (grep-like) |
 
 Prefer graph tools over file-by-file exploration: a single `search_graph` call
-returns what would take dozens of `grep`/Read calls, at ~500 tokens vs ~80K.
+returns what would take dozens of `grep`/`Read` calls, at ~500 tokens vs ~80K.
 
 The MCP server is registered in `kilo.json`, `.mcp.json`, and
 `~/.config/opencode/opencode.json` — all agents share one SQLite graph at

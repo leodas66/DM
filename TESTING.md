@@ -25,6 +25,7 @@ Then `./bin/dm -d /tmp/out -n 8 http://127.0.0.1:8099/big.bin`.
 |---|---|---|---|
 | `make check` | gofmt clean, vet clean, race tests pass, build ok | pass | 2026-11-01 |
 | `./bin/dm -version` | prints `dm 0.1.0-dev` | pass | 2026-11-01 |
+| Fresh clone, no `npm install` | `make check` green; embedded UI placeholders satisfy both `go:embed` directives | pass — build + vet + tests green in a clone with only `internal/web/dist/.gitkeep` and `internal/gui/wails/frontend/dist/.gitkeep`; `TestHandlerServesAssets` skips with "run `npm run build` in ui/" | 2026-11-14 |
 ## Phase 1: probe + segmented downloader
 
 | Check | Expected | Result | Date |
@@ -43,24 +44,24 @@ Then `./bin/dm -d /tmp/out -n 8 http://127.0.0.1:8099/big.bin`.
 
 | Check | Expected | Result | Date |
 |---|---|---|---|
-| `kill -9` mid-download, restart | resumes, checksum correct | | |
-| Pause/resume 20 times, then finish | checksum correct | | |
-| File changed on server between pause and resume | detects ETag/Last-Modified change, restarts from zero | | |
-| Max-concurrency limit | never exceeds configured running downloads | | |
-| Speed limit (global and per download) | measured rate within ~10% of cap | | |
-| Disk full mid-write | fails cleanly, error surfaced, no corrupt final file | | |
-| Destination directory removed mid-download | fails cleanly with a useful message | | |
+| `kill -9` mid-download, restart | resumes, checksum correct | pass (automated: `TestKillNineAndResume` — SIGKILLs a child process mid-download, reopens the DB, finishes, compares SHA-256) | 2026-11-14 |
+| Pause/resume 20 times, then finish | checksum correct | not run — one pause/resume cycle is covered by `TestPauseResumesFromPartialFile`; the 20-cycle soak is manual | — |
+| File changed on server between pause and resume | detects ETag/Last-Modified change, restarts from zero | pass (automated: `TestChangedValidatorRestartsFromZero`) | 2026-11-14 |
+| Max-concurrency limit | never exceeds configured running downloads | pass (automated: `TestMaxConcurrentIsEnforced` — samples the Manager's running count and also checks the server saw two GETs at once) | 2026-11-14 |
+| Speed limit (global and per download) | measured rate within ~10% of cap | partial — `TestGlobalSpeedLimitSlowsTransfer` and `TestBucketDelaysLargeRequests` prove the cap is applied; the ~10% accuracy figure is not measured | 2026-11-14 |
+| Disk full mid-write | fails cleanly, error surfaced, no corrupt final file | not run under the Manager; the Phase 1 CLI hit the same path (`disk quota exceeded`, `.part` kept, existing file untouched) | — |
+| Destination directory removed mid-download | fails cleanly with a useful message | not run | — |
 
 ## Phase 3: API
 
 | Check | Expected | Result | Date |
 |---|---|---|---|
-| Request without token | 401 | | |
-| Request with wrong token | 401 | | |
-| Request with foreign `Origin` | rejected | | |
-| `curl` add/list/pause/resume/cancel/delete | all behave per PLAN §5 | | |
-| WebSocket client receives added/progress/status/removed | in order, valid JSON | | |
-| SIGTERM during download | state persisted, process exits cleanly | | |
+| Request without token | 401 | pass (automated: `TestRESTRequiresAuth`) | 2026-11-14 |
+| Request with wrong token | 401 | pass (same test) | 2026-11-14 |
+| Request with foreign `Origin` | rejected | pass (automated: `TestOriginRejected`, `TestWSRejectsBadOrigin`) | 2026-11-14 |
+| `curl` add/list/pause/resume/cancel/delete | all behave per PLAN §5 | pass over httptest (automated: `TestRESTAddListGet`, `TestRESTPauseResumeCancel`, `TestRESTDelete`, `TestRESTSettings`); a hand-run curl pass was not repeated | 2026-11-14 |
+| WebSocket client receives added/progress/status/removed | in order, valid JSON | pass (automated: `TestWSReceivesEvents`; auth by `TestWSRequiresAuth`) | 2026-11-14 |
+| SIGTERM during download | state persisted, process exits cleanly | not run — needs a real daemon process; graceful shutdown is only covered indirectly by `Manager.Shutdown` | — |
 
 ## Phase 4: extension
 
@@ -75,7 +76,7 @@ Then `./bin/dm -d /tmp/out -n 8 http://127.0.0.1:8099/big.bin`.
 
 | Check | Expected | Result | Date |
 |---|---|---|---|
-| Bundle size | under ~100 KB gzipped | | |
+| Bundle size | under ~100 KB gzipped | pass — 12.3 KB gzipped total (10.4 KB JS, 1.6 KB CSS, 0.3 KB HTML) | 2026-11-14 |
 | Live progress with tab open | updates without reload | | |
 | Tab closed | daemon RSS still under 20 MB idle | | |
 | Dark/light | both readable, no hardcoded colors | | |
@@ -84,9 +85,9 @@ Then `./bin/dm -d /tmp/out -n 8 http://127.0.0.1:8099/big.bin`.
 
 | Check | Expected | Result | Date |
 |---|---|---|---|
-| `makepkg -si` | installs, systemd user unit starts | | |
-| Login on a fresh user | daemon running, token created 0600 | | |
-| Uninstall | no orphan config or data | | |
+| `makepkg -si` | installs, systemd user unit starts | not run — requires an Arch host (`makepkg`/`pacman` unavailable here) | — |
+| Login on a fresh user | daemon running, token created 0600 | not run — same | — |
+| Uninstall | no orphan config or data | not run — same | — |
 
 ## Deferred checks
 
@@ -101,3 +102,9 @@ Record any check skipped, with the reason and the phase it was moved to.
 | 5 | Live progress with tab open | Requires a running browser; verify manually |
 | 5 | Tab closed → daemon RSS under 20 MB idle | Requires a running browser; verify manually |
 | 5 | Dark/light both readable | Requires a running browser; verify manually |
+| 2 | Pause/resume 20 cycles | Long soak; automated coverage is one cycle (`TestPauseResumesFromPartialFile`) |
+| 2 | Disk full under the Manager | Damaging to the host; the Phase 1 CLI exercised the same error path |
+| 2 | Destination directory removed mid-download | Manual filesystem check; not automated |
+| 3 | SIGTERM during download | Needs a real daemon process; `Manager.Shutdown` is covered indirectly |
+| 6 | `makepkg -si`, fresh-login, uninstall | Requires an Arch host; `makepkg`/`pacman` are unavailable in this environment |
+| 6 | Desktop app (Wails) launch and shutdown | Not in PLAN; needs a desktop session plus the Wails toolchain, so it is not part of `make check` |
