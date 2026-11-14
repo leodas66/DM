@@ -17,9 +17,16 @@ build() {
   # The daemon is a pure-Go binary; the client needs cgo for GTK4.
   export CGO_ENABLED=1
   export GOFLAGS="-trimpath"
+  # Fail fast when the installed Go is older than go.mod requires. With the
+  # default GOTOOLCHAIN=auto, Go downloads a toolchain through the module proxy,
+  # which prints nothing and looks exactly like a hung build.
+  export GOTOOLCHAIN=local
 
+  msg2 "building dm (daemon and CLI)"
   go build -o dm ./cmd/dm
+  msg2 "building dm-native-host"
   go build -o dm-native-host ./cmd/dm-native-host
+  msg2 "building dm-desktop; the first GTK4 build compiles the bindings and can take several minutes"
   (cd desktop && go build -o dm-desktop .)
 }
 

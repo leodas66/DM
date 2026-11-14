@@ -98,8 +98,10 @@ historical record; the GTK4 client is covered in its own section.
 
 | Check | Expected | Result | Date |
 |---|---|---|---|
-| `makepkg -si` | installs, systemd user unit starts | not run — requires an Arch host (`makepkg`/`pacman` unavailable here) | — |
-| Login on a fresh user | daemon running, token created 0600 | not run — same | — |
+| `makepkg` build | produces `dm-0.2.0-1-x86_64.pkg.tar.zst` with all three binaries, the unit, entry, icon, Firefox manifest and license | pass — package built from the published `v0.2.0` tag; `bsdtar -tf` lists every expected path | 2026-11-15 |
+| Client build duration | first GTK4 build completes instead of hanging | pass — 510 s for `dm-desktop` on 8 cores with a cold cache; 12 s for the whole package once warm, so a silent pause is compilation | 2026-11-15 |
+| `makepkg -si` install | installs, systemd user unit starts | not run — needs root/pacman transaction in this environment; the build half is verified above | — |
+| Login on a fresh user | daemon running, token created 0600 | not run — needs a fresh user session | — |
 | Uninstall | no orphan config or data | not run — same | — |
 
 ## GTK4 desktop client

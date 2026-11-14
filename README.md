@@ -15,9 +15,14 @@ downloading, and a native GTK4 desktop client.
 
 ```sh
 git clone https://github.com/leodas66/DM.git
-cd dm
+cd DM
 makepkg -si
 ```
+
+The build compiles the GTK4 client, and that step takes several minutes the
+first time (about 8 minutes on 8 cores). `go build` prints nothing while it
+works, so a long pause after `building dm-desktop` is expected, not a hang.
+`makepkg` then asks for confirmation and your sudo password to install.
 
 This installs:
 
