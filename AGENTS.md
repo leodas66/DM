@@ -129,3 +129,12 @@ changes; reindex manually with:
 ```
 codebase-memory-mcp cli index_repository '{"repo_path": "/home/vishwa/Projects/project1"}'
 ```
+
+## GTK4 UI skills
+- Project-local skills are in `.agents/skills/`; start with
+  `dm-ui-router` for GTK4 desktop tasks.
+- Load only the smallest relevant set (normally one, never more than three).
+- `docs/GTK4-DESIGN-SPEC.md` is authoritative over skill recommendations.
+- These skills apply only to the GTK4 desktop client. They do not change the
+  current daemon/CLI phase or authorize GTK, Qt, Libadwaita, or other new
+  dependencies. See `docs/UI-SKILLS.md` for provenance and update policy.
