@@ -494,10 +494,7 @@ func (w *window) buildStack() *gtk.Stack {
 		if r == nil {
 			return
 		}
-		if r.id != "" {
-			delete(w.visibleRows, r.id)
-			r.id = ""
-		}
+		w.dropVisible(r)
 	})
 
 	w.listView = gtk.NewListView(selection, &factory.ListItemFactory)
@@ -520,6 +517,21 @@ func (w *window) rowFor(item *gtk.ListItem) *row {
 		return nil
 	}
 	return w.rowWidgets[objectKey(child)]
+}
+
+// dropVisible clears r's visible-row entry. GTK can bind the replacement row
+// for a download before it unbinds the old one (a model splice rebinds every
+// visible row), so the entry is removed only when it still points at r.
+// Deleting unconditionally would drop the fresh row's mapping and freeze that
+// row's progress updates until the next full rebuild.
+func (w *window) dropVisible(r *row) {
+	if r.id == "" {
+		return
+	}
+	if w.visibleRows[r.id] == r {
+		delete(w.visibleRows, r.id)
+	}
+	r.id = ""
 }
 
 // objectKey identifies a widget by its native GObject pointer. Two Go wrappers
