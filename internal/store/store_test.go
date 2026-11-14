@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"errors"
+	"fmt"
 	"path/filepath"
 	"testing"
 	"time"
@@ -332,5 +333,45 @@ func TestSettingsRoundTrip(t *testing.T) {
 	}
 	if got, _ := s.GetSetting(ctx, "settings"); got != `{"dir":"/b"}` {
 		t.Fatalf("GetSetting after overwrite = %q", got)
+	}
+}
+
+func TestStartAtRoundTrip(t *testing.T) {
+	ctx := context.Background()
+	s := openTemp(t)
+
+	now := time.Now().UTC().Truncate(time.Millisecond)
+	cases := []struct {
+		name string
+		at   time.Time
+	}{
+		{"immediate", time.Time{}},
+		{"scheduled", now.Add(90 * time.Minute)},
+		{"legacy wrapped zero", time.Unix(0, time.Time{}.UnixNano()).UTC()},
+	}
+	for i, c := range cases {
+		d := model.Download{
+			ID:        fmt.Sprintf("dl%d", i),
+			URL:       "https://example.com/f",
+			Filename:  "f",
+			Dir:       "/tmp",
+			Status:    model.StatusQueued,
+			CreatedAt: now,
+			StartAt:   c.at,
+		}
+		if err := s.Save(ctx, d); err != nil {
+			t.Fatalf("%s: Save: %v", c.name, err)
+		}
+		got, err := s.Get(ctx, d.ID)
+		if err != nil {
+			t.Fatalf("%s: Get: %v", c.name, err)
+		}
+		want := c.at
+		if c.name != "scheduled" {
+			want = time.Time{}
+		}
+		if !got.StartAt.Equal(want) {
+			t.Errorf("%s: StartAt = %v, want %v", c.name, got.StartAt, want)
+		}
 	}
 }

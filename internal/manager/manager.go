@@ -873,10 +873,31 @@ func (m *Manager) cancel(id string) result {
 	return result{download: it.d}
 }
 
+// tracked returns the live item for id, loading a finished record from the
+// store when the daemon has restarted since it finished. Restarts reload only
+// unfinished work, so history rows exist in the API but not in the loop's map.
+func (m *Manager) tracked(ctx context.Context, id string) (*item, error) {
+	if it, ok := m.items[id]; ok {
+		return it, nil
+	}
+	d, err := m.store.Get(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	it := &item{d: d}
+	m.items[id] = it
+	m.order = append(m.order, id)
+	return it, nil
+}
+
+// resume re-queues a paused, failed or canceled download, including one that
+// finished in an earlier daemon run. Credentials are memory-only by design, so
+// a download retried after a restart goes out without its original cookies and
+// headers; a URL that needs them fails again and reports why.
 func (m *Manager) resume(ctx context.Context, id string) result {
-	it, ok := m.items[id]
-	if !ok {
-		return result{err: store.ErrNotFound}
+	it, err := m.tracked(ctx, id)
+	if err != nil {
+		return result{err: err}
 	}
 	switch it.d.Status {
 	case model.StatusPaused, model.StatusFailed, model.StatusCanceled:
@@ -890,9 +911,9 @@ func (m *Manager) resume(ctx context.Context, id string) result {
 }
 
 func (m *Manager) remove(ctx context.Context, id string, deleteFile bool) result {
-	it, ok := m.items[id]
-	if !ok {
-		return result{err: store.ErrNotFound}
+	it, err := m.tracked(ctx, id)
+	if err != nil {
+		return result{err: err}
 	}
 	if it.d.Status == model.StatusRunning || it.d.Status == model.StatusProbing {
 		it.action = "cancel"

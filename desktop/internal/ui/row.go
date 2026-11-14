@@ -145,9 +145,15 @@ func newRow(w *window) *row {
 		if r.id == "" {
 			return
 		}
-		if d, ok := r.w.store.get(r.id); ok && d.Status == model.StatusPaused {
-			r.w.resumeDownload(r.id)
-			return
+		if d, ok := r.w.store.get(r.id); ok {
+			switch d.Status {
+			case model.StatusPaused:
+				r.w.resumeDownload(r.id)
+				return
+			case model.StatusFailed, model.StatusCanceled:
+				r.w.retryDownload(r.id)
+				return
+			}
 		}
 		r.w.pauseDownload(r.id)
 	})
@@ -250,6 +256,12 @@ func (r *row) setDownload(d model.Download, bytesPerSecond float64) {
 		r.pause.SetVisible(true)
 		r.pause.SetIconName("media-playback-start-symbolic")
 		r.setButtonAccessible(r.pause, "Resume "+text.Title)
+	case model.StatusFailed, model.StatusCanceled:
+		// Retry is a fresh attempt, not a continuation: the icon says so and
+		// the control is the same slot the in-flight states use.
+		r.pause.SetVisible(true)
+		r.pause.SetIconName("view-refresh-symbolic")
+		r.setButtonAccessible(r.pause, "Retry "+text.Title)
 	default:
 		r.pause.SetVisible(false)
 	}

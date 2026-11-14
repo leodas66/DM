@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -1077,5 +1078,138 @@ func TestFinishedDownloadsSurviveRestart(t *testing.T) {
 	}
 	if got.Filename != done.Filename || got.Status != model.StatusCompleted {
 		t.Fatalf("Get after restart = %+v", got)
+	}
+}
+
+func TestRetryFailedDownloadAfterRestart(t *testing.T) {
+	body := testBytes(256 << 10)
+	var broken atomic.Bool
+	broken.Store(true)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if broken.Load() {
+			http.Error(w, "not yet", http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Length", strconv.Itoa(len(body)))
+		if r.Method == http.MethodHead {
+			return
+		}
+		// Range is ignored on purpose: a retry only needs to finish, not to
+		// exercise segmentation.
+		_, _ = w.Write(body)
+	}))
+	defer srv.Close()
+
+	dir := t.TempDir()
+	st, err := store.Open(filepath.Join(dir, "dm.db"))
+	if err != nil {
+		t.Fatalf("store.Open: %v", err)
+	}
+	defer st.Close()
+	settings := Settings{Dir: filepath.Join(dir, "out"), MaxConcurrent: 1, Connections: 2, SaveInterval: 10 * time.Millisecond}
+
+	ctx1, cancel1 := context.WithCancel(context.Background())
+	defer cancel1()
+	first := New(st, settings, nil)
+	if err := first.Start(ctx1); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	d, err := first.Add(context.Background(), AddRequest{URL: srv.URL + "/retry.bin"})
+	if err != nil {
+		t.Fatalf("Add: %v", err)
+	}
+	failed := waitFor(t, first, d.ID, 10*time.Second, "fail", func(d model.Download) bool {
+		return d.Status == model.StatusFailed
+	})
+	if failed.Error == "" {
+		t.Fatal("failed download has no error message")
+	}
+	sctx1, scancel1 := context.WithTimeout(context.Background(), 5*time.Second)
+	defer scancel1()
+	if err := first.Shutdown(sctx1); err != nil {
+		t.Fatalf("Shutdown: %v", err)
+	}
+
+	// The restart reloads unfinished work only, so the failure is history:
+	// listed by the API but absent from the loop until it is retried.
+	broken.Store(false)
+	ctx2, cancel2 := context.WithCancel(context.Background())
+	defer cancel2()
+	second := New(st, Settings{Dir: filepath.Join(dir, "out")}, nil)
+	if err := second.Start(ctx2); err != nil {
+		t.Fatalf("Start second: %v", err)
+	}
+	defer func() {
+		sctx, scancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer scancel()
+		_ = second.Shutdown(sctx)
+	}()
+
+	list, err := second.List(context.Background())
+	if err != nil || len(list) != 1 || list[0].Status != model.StatusFailed {
+		t.Fatalf("List after restart = %+v, %v", list, err)
+	}
+
+	if _, err := second.Resume(context.Background(), d.ID); err != nil {
+		t.Fatalf("Resume (retry): %v", err)
+	}
+	done := waitFor(t, second, d.ID, 10*time.Second, "retry complete", func(d model.Download) bool {
+		return d.Status == model.StatusCompleted || d.Status == model.StatusFailed
+	})
+	if done.Status != model.StatusCompleted {
+		t.Fatalf("retry ended %s: %q", done.Status, done.Error)
+	}
+	wantChecksum(t, filepath.Join(done.Dir, done.Filename), body)
+}
+
+func TestRemoveFinishedDownloadAfterRestart(t *testing.T) {
+	dir := t.TempDir()
+	st, err := store.Open(filepath.Join(dir, "dm.db"))
+	if err != nil {
+		t.Fatalf("store.Open: %v", err)
+	}
+	defer st.Close()
+
+	out := filepath.Join(dir, "out")
+	if err := os.MkdirAll(out, 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	path := filepath.Join(out, "old.bin")
+	if err := os.WriteFile(path, []byte("stale"), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	done := model.Download{
+		ID:        "old1",
+		URL:       "https://example.com/old.bin",
+		Filename:  "old.bin",
+		Dir:       out,
+		Size:      5,
+		Status:    model.StatusCompleted,
+		CreatedAt: time.Now().UTC().Add(-time.Hour),
+	}
+	if err := st.Save(context.Background(), done); err != nil {
+		t.Fatalf("store.Save: %v", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	m := New(st, Settings{Dir: out}, nil)
+	if err := m.Start(ctx); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	defer func() {
+		sctx, scancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer scancel()
+		_ = m.Shutdown(sctx)
+	}()
+
+	if err := m.Remove(context.Background(), done.ID, true); err != nil {
+		t.Fatalf("Remove of stored history: %v", err)
+	}
+	if _, err := m.Get(context.Background(), done.ID); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("Get after remove = %v, want ErrNotFound", err)
+	}
+	if _, err := os.Stat(path); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("file still present after remove: %v", err)
 	}
 }

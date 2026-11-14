@@ -140,8 +140,8 @@ endpoint, `cmd/dm-native-host` plus `internal/nativehost` implement framing and
 the host with no port or token of its own. The browser checks themselves are
 still manual (see `TESTING.md`). Step 5 is done for the main surface: the GTK
 client covers the window, filters, list, add, delete confirmation, live progress,
-preferences, and category management; retry is missing because the API has no
-endpoint for it. Step 6 ships daemon, host, and client in one package. Step 1
+preferences, category management, and retry for failed or canceled downloads.
+Step 6 ships daemon, host, and client in one package. Step 1
 (`internal/app` services) and step 7 (removing the legacy UI) are not started;
 step 7 stays blocked until parity is complete.
 

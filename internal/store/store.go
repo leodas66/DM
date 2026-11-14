@@ -149,7 +149,7 @@ func (s *Store) Save(ctx context.Context, d model.Download) error {
 			last_modified = excluded.last_modified,
 			status = excluded.status,
 			error = excluded.error`,
-		d.ID, d.URL, d.FinalURL, d.Filename, d.Dir, d.CategoryID, d.StartAt.UnixNano(), d.Size, boolInt(d.AcceptsRanges),
+		d.ID, d.URL, d.FinalURL, d.Filename, d.Dir, d.CategoryID, startAtNanos(d.StartAt), d.Size, boolInt(d.AcceptsRanges),
 		d.ETag, d.LastModified, string(d.Status), d.Error, d.CreatedAt.UnixNano(),
 	)
 	if err != nil {
@@ -408,9 +408,23 @@ func scanDownload(sc scanner) (model.Download, error) {
 	}
 	d.AcceptsRanges = ranges != 0
 	d.Status = model.Status(status)
-	d.StartAt = time.Unix(0, startNS).UTC()
+	// 0 is the "start immediately" marker. A start time before 1970 cannot be
+	// intentional, and earlier builds persisted the zero time as a wrapped
+	// negative UnixNano, which decoded to 1754; treat both as zero.
+	if startNS > 0 {
+		d.StartAt = time.Unix(0, startNS).UTC()
+	}
 	d.CreatedAt = time.Unix(0, createdNS).UTC()
 	return d, nil
+}
+
+// startAtNanos encodes StartAt without relying on time.Time's zero value,
+// whose UnixNano is outside the representable range.
+func startAtNanos(t time.Time) int64 {
+	if t.IsZero() {
+		return 0
+	}
+	return t.UnixNano()
 }
 
 func boolInt(b bool) int {

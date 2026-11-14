@@ -984,18 +984,24 @@ func (w *window) onAdded(d model.Download) {
 }
 
 func (w *window) pauseDownload(id string) {
-	w.control("pause", id)
+	w.control("pause", id, "pause")
 }
 
 func (w *window) resumeDownload(id string) {
-	w.control("resume", id)
+	w.control("resume", id, "resume")
+}
+
+// retryDownload re-queues a failed or canceled download. The daemon exposes it
+// as resume: a retry is the same transition back to queued.
+func (w *window) retryDownload(id string) {
+	w.control("resume", id, "retry")
 }
 
 func (w *window) cancelDownload(id string) {
-	w.control("cancel", id)
+	w.control("cancel", id, "cancel")
 }
 
-func (w *window) control(action, id string) {
+func (w *window) control(action, id, verb string) {
 	c := w.client
 	if c == nil {
 		w.toast("Not connected to the DM daemon.")
@@ -1012,7 +1018,7 @@ func (w *window) control(action, id string) {
 			err = c.Cancel(w.ctx, id)
 		}
 		if err != nil {
-			message := "Could not " + action + " the download: " + err.Error()
+			message := "Could not " + verb + " the download: " + err.Error()
 			w.post(func() { w.toast(message) })
 		}
 	}()
