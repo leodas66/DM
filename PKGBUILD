@@ -4,11 +4,11 @@ pkgver=0.2.0
 pkgrel=1
 pkgdesc="Lightweight segmented download manager: local daemon, GTK4 client and browser host"
 arch=('x86_64' 'aarch64')
-url="https://github.com/vishwa/dm"
+url="https://github.com/VDev45/DM"
 license=('MIT')
 depends=('glibc' 'gtk4')
 makedepends=('go' 'gtk4' 'git')
-source=("git+https://github.com/vishwa/dm.git#tag=v${pkgver}")
+source=("dm::git+https://github.com/VDev45/DM.git#tag=v${pkgver}")
 sha256sums=('SKIP')
 
 build() {
