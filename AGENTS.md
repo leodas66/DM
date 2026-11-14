@@ -2,9 +2,13 @@
 
 ## What this repo is
 A download manager daemon in Go, built phase by phase from `PLAN.md` (the
-spec — source of truth). Phases 0, R (research) and 1 (probe + segmented
-downloader + CLI) are done. Phase 2 (SQLite store, Manager, queue, resume) is
-next. `internal/api` and `internal/web` are still doc-only placeholders.
+spec — source of truth). Phases 0, R and 1–6 are committed: probe + segmented
+downloader, SQLite store + Manager (queue, concurrency and speed limits,
+resume, crash recovery), HTTP API + WebSocket events, MV3 browser extension,
+embedded Svelte UI, categories/scheduler/packaging. A Wails desktop wrapper
+(`internal/gui/wails`) was added after Phase 6 and is not in `PLAN.md`.
+`TESTING.md` holds the check matrix and what is still manual; `docs/DECISIONS.md`
+holds the open provisional calls.
 
 Read `PROCESS.md` before starting work. It defines how much you decide alone,
 when you must stop, and what counts as done. `docs/DECISIONS.md` records every
@@ -27,8 +31,10 @@ non-obvious call already made — check it before re-litigating a choice.
 
 ## Dependencies
 - Never add one without asking. Stdlib first.
-- Pre-approved: `modernc.org/sqlite` (Phase 2 only), Svelte + Vite in `ui/`,
+- Pre-approved: `modernc.org/sqlite` (Phase 2), Svelte + Vite in `ui/`,
   esbuild in `extension/`.
+- Already in the tree: Wails v2 for the desktop wrapper (D018), added after
+  the planned phases. Ask before adding anything else.
 - `chi` and `cobra` are *not* needed — stdlib mux, `flag`, `log/slog`.
 - Module path is `github.com/vishwa/dm` (provisional, D001 in the decision
   log). Binary is `cmd/dm` → `dm`.
@@ -57,21 +63,30 @@ non-obvious call already made — check it before re-litigating a choice.
 - Never copy or translate code from GPL sources (aria2, Gopeed, XDM, old FDM)
   into this repo — that would relicense the project.
 - Do not decompile FDM 5.0+; observe behaviour only.
-- This project's license is undecided; ask before adding one or vendoring
-  anything copyleft.
+- License is MIT (D013); do not add copyleft code or dependencies.
 
 ## Layout (PLAN §4)
 `cmd/dm`, `internal/{model,probe,download,manager,store,api,web}`, `ui/`
-(Svelte), `extension/` (TypeScript MV3). The built UI is embedded via
-`go:embed` in `internal/web` and served at `/`. `scripts/mockserver` is a dev
-tool for manual checks (`-no-range`, `-flaky-every N`), see `TESTING.md`.
+(Svelte), `extension/` (TypeScript MV3), `internal/gui/wails` (desktop
+wrapper). The built UI is embedded via `go:embed` in `internal/web` and served
+at `/`. Both embedded trees — `internal/web/dist` and
+`internal/gui/wails/frontend/dist` — are gitignored except for a tracked
+`.gitkeep`, so `make check` works on a fresh clone without `npm install`.
+`internal/web` embeds `all:dist` and serves a "UI not built" page when
+`dist/index.html` is absent instead of panicking. Build the real bundles with
+`npm run build` in `ui/` or in the desktop frontend directory; each build
+script re-creates the `.gitkeep` that vite's `emptyOutDir` deletes.
+`scripts/mockserver` is a dev tool for manual checks (`-no-range`,
+`-flaky-every N`), see `TESTING.md`.
 
 ## Known local quirks
-- Git has no configured `user.name`/`user.email`; commits so far used a
-  placeholder identity (D009). Fix before the author takes ownership of
-  history: `git config user.name … && git config user.email … && git commit
-  --amend --reset-author --no-edit`.
+- Git identity is still a placeholder (`Agent V <agent-v@kilo.local>`, D009).
+  Before the author takes ownership of history, set the real identity and
+  rewrite the author: `git config user.name … && git config user.email … &&
+  git commit --amend --reset-author --no-edit` (or filter the whole history).
 - Go toolchain is `go1.27.3` (custom build); `go.mod` pins it.
+- `go get` needs `GOPROXY=https://goproxy.io,direct` here; the default
+  `proxy.golang.org` times out.
 
 ## Code search
 `codebase-memory-mcp` is installed and indexed for this repo. Use it for

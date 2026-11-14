@@ -1,0 +1,4 @@
+# codebase-memory-mcp exclusions — additive on top of .gitignore
+bin/
+*.db
+*.sum.bak

@@ -12,22 +12,39 @@ import (
 	"time"
 )
 
-//go:embed dist/*
+// all: includes the dotfiles, so the tracked dist/.gitkeep alone keeps this
+// pattern valid on a fresh clone where the UI has not been built.
+//
+//go:embed all:dist
 var embedFS embed.FS
 
+// uiNotBuiltHTML is served when dist/index.html is absent, i.e. when the
+// daemon was built without running `npm run build` in ui/. Failing at
+// startup would make a fresh clone unusable; a readable page is better.
+const uiNotBuiltHTML = `<!DOCTYPE html>
+<html lang="en">
+  <head><meta charset="utf-8" /><title>dm</title></head>
+  <body>
+    <p>
+      The web UI has not been built. Run <code>npm install &amp;&amp; npm run build</code>
+      in <code>ui/</code>, then rebuild the daemon.
+    </p>
+  </body>
+</html>
+`
+
 var (
-	indexHTML []byte
+	indexHTML = []byte(uiNotBuiltHTML)
 	indexMod  time.Time
 )
 
 func init() {
-	var err error
-	indexHTML, err = fs.ReadFile(embedFS, "dist/index.html")
+	data, err := fs.ReadFile(embedFS, "dist/index.html")
 	if err != nil {
-		panic("web: failed to read embedded index.html: " + err.Error())
+		return // UI not built; uiNotBuiltHTML stays in place.
 	}
-	info, err := fs.Stat(embedFS, "dist/index.html")
-	if err == nil {
+	indexHTML = data
+	if info, err := fs.Stat(embedFS, "dist/index.html"); err == nil {
 		indexMod = info.ModTime()
 	}
 }

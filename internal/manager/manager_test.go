@@ -273,6 +273,7 @@ func TestAddCompletesAndPersists(t *testing.T) {
 
 func TestMaxConcurrentIsEnforced(t *testing.T) {
 	const n = 6
+	const limit = 2
 	const payload = 128 << 10
 	idle := newRangeServer(testBytes(payload))
 	idle.chunk = 16 << 10
@@ -280,7 +281,40 @@ func TestMaxConcurrentIsEnforced(t *testing.T) {
 	srv := httptest.NewServer(idle)
 	defer srv.Close()
 
-	h := newHarness(t, Settings{MaxConcurrent: 2, Connections: 1})
+	h := newHarness(t, Settings{MaxConcurrent: limit, Connections: 1})
+
+	// Sample the Manager's own running count. Counting concurrent GETs on the
+	// test server is not the same invariant: a finished handler can still be
+	// unwinding when the Manager has already started the next download, which
+	// shows up as a third open connection without three downloads running.
+	stop := make(chan struct{})
+	peakCh := make(chan int, 1)
+	go func() {
+		peak := 0
+		for {
+			select {
+			case <-stop:
+				peakCh <- peak
+				return
+			default:
+			}
+			list, err := h.m.List(context.Background())
+			if err != nil {
+				peakCh <- -1
+				return
+			}
+			running := 0
+			for _, d := range list {
+				if d.Status == model.StatusRunning {
+					running++
+				}
+			}
+			if running > peak {
+				peak = running
+			}
+			time.Sleep(time.Millisecond)
+		}
+	}()
 
 	ids := make([]string, n)
 	for i := range ids {
@@ -291,8 +325,7 @@ func TestMaxConcurrentIsEnforced(t *testing.T) {
 		ids[i] = d.ID
 	}
 
-	// Sample while the queue drains; more than two running downloads at once
-	// would show up as more than two concurrent GETs on the server.
+	// Let the queue drain while the sampler watches.
 	deadline := time.Now().Add(10 * time.Second)
 	for _, id := range ids {
 		if d := waitCompleted(t, h.m, id, time.Until(deadline)); d.Status != model.StatusCompleted {
@@ -300,12 +333,21 @@ func TestMaxConcurrentIsEnforced(t *testing.T) {
 		}
 	}
 
-	_, maxActive, _ := idle.stats()
-	if maxActive > 2 {
-		t.Fatalf("observed %d concurrent downloads, want <= 2", maxActive)
+	close(stop)
+	peak := <-peakCh
+	if peak < 0 {
+		t.Fatal("sampling manager state failed")
 	}
-	if maxActive < 2 {
-		t.Fatalf("observed only %d concurrent downloads, want the limit to be used", maxActive)
+	if peak > limit {
+		t.Fatalf("manager ran %d downloads at once, limit %d", peak, limit)
+	}
+	if peak < limit {
+		t.Fatalf("manager ran only %d downloads at once, want the limit to be used", peak)
+	}
+
+	// And the work really was parallel: the server saw both at once.
+	if _, maxActive, _ := idle.stats(); maxActive < limit {
+		t.Fatalf("server saw only %d concurrent GETs, want %d", maxActive, limit)
 	}
 }
 
