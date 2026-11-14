@@ -1,7 +1,7 @@
 # GTK4 Desktop Design Specification
 
 Status: approved design baseline for the GTK4 client
-Scope: `desktop/` GTK4 application only. This document does not define the daemon, CLI, browser extension, or transitional Svelte/Wails interfaces.
+Scope: `desktop/` GTK4 application only. This document does not define the daemon, CLI, browser extension, or the removed web/Wails interfaces (D035).
 
 ## 1. Product and platform contract
 

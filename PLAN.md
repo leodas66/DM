@@ -183,12 +183,11 @@ Migration requirements:
 Done when: cookie-protected downloads work in Chrome and Firefox, daemon-down
 fallback works, and malformed/oversized native messages are rejected.
 
-### Phase 5: Legacy Svelte UI (implemented; scheduled for removal)
+### Phase 5: Legacy Svelte UI (removed)
 
-The Svelte and Wails frontends are transitional. Do not add features to them.
-The GTK4 desktop client in `desktop/` replaces both. Remove all Svelte/Vite
-sources, Wails frontend/backend glue and `internal/web` only after GTK feature
-parity, packaging and test checks pass. See `docs/ARCHITECTURE.md`.
+The Svelte web UI and the Wails desktop wrapper were transitional. The GTK4
+desktop client in `desktop/` replaced both, and the sources are deleted (D035).
+Git history keeps them. See `docs/ARCHITECTURE.md`.
 
 ### Phase 6: Extras
 - Categories with default folders, scheduler, clipboard link detection, yt-dlp integration for video sites.
@@ -205,7 +204,7 @@ migration. The approved work is:
    Keep GTK/cgo dependencies out of the daemon module and its normal CI gate.
 4. After native feature parity, remove `ui/`, `internal/web/`, Wails and all
    Svelte/Vite artifacts. Keep REST/WebSocket for native desktop, native host
-   and future clients.
+   and future clients. (Done, D035.)
 
 ## 8. Rules for working with the AI tool
 1. One phase per session; paste the relevant section and prompt only.

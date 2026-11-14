@@ -3,7 +3,7 @@
 // Usage:
 //
 //	dm <url>              one-shot download to disk (Phase 1 behavior)
-//	dm --serve            run as daemon: API + web UI on 127.0.0.1
+//	dm --serve            run as daemon: API on 127.0.0.1
 package main
 
 import (
@@ -15,7 +15,6 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"strings"
@@ -28,7 +27,6 @@ import (
 	"github.com/vishwa/dm/internal/probe"
 	"github.com/vishwa/dm/internal/runtime"
 	"github.com/vishwa/dm/internal/store"
-	"github.com/vishwa/dm/internal/web"
 )
 
 const version = "0.2.0"
@@ -41,8 +39,7 @@ func main() {
 	tries := fs.Int("tries", 5, "attempts per segment")
 	timeout := fs.Duration("timeout", 0, "overall timeout (0 = none)")
 	showVersion := fs.Bool("version", false, "print version and exit")
-	serveMode := fs.Bool("serve", false, "run as daemon with API and web UI")
-	openUI := fs.Bool("open-ui", false, "open the legacy web UI in a browser when serving")
+	serveMode := fs.Bool("serve", false, "run as daemon with the local API")
 	fs.Usage = func() {
 		fmt.Fprintf(os.Stderr, "usage: dm [flags] <url>\n\n")
 		fs.PrintDefaults()
@@ -55,7 +52,7 @@ func main() {
 	}
 
 	if *serveMode {
-		if err := runServe(*openUI); err != nil {
+		if err := runServe(); err != nil {
 			fmt.Fprintf(os.Stderr, "dm: %v\n", err)
 			os.Exit(1)
 		}
@@ -81,10 +78,10 @@ func defaultDownloadDir() string {
 	return filepath.Join(home, "Downloads")
 }
 
-// runServe starts the daemon: SQLite store, Manager, API server, and the
-// embedded web UI, all on a single 127.0.0.1 listener. It runs until
-// SIGINT/SIGTERM, then shuts down gracefully.
-func runServe(openUI bool) error {
+// runServe starts the daemon: SQLite store, Manager, and API server, all on a
+// single 127.0.0.1 listener. It runs until SIGINT/SIGTERM, then shuts down
+// gracefully.
+func runServe() error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
@@ -116,12 +113,10 @@ func runServe(openUI bool) error {
 		return err
 	}
 
-	// Create the API server and wrap it with the embedded web UI. This path
-	// serves with its own http.Server, so it must start event broadcasting
-	// itself; ListenAndServe is not called here.
+	// Create the API server. This path serves with its own http.Server, so it
+	// must start event broadcasting itself.
 	apiSrv := api.NewServer(mgr, token)
 	apiSrv.Broadcast(ctx)
-	handler := web.Handler(apiSrv)
 
 	// Listen on loopback only.
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
@@ -144,47 +139,18 @@ func runServe(openUI bool) error {
 	if tokenPath, err := api.TokenFile(); err == nil {
 		fmt.Printf("Bearer token file: %s\n", tokenPath)
 	}
-	// The desktop client is the UI. The embedded web UI stays available behind
-	// a flag until parity is reached, and only then is the token put in a URL.
-	uiURL := fmt.Sprintf("http://%s/?token=%s", addr, token)
-	if openUI {
-		fmt.Printf("Opening legacy web UI at %s\n", uiURL)
-	}
-
-	srv := &http.Server{Handler: handler}
+	// The desktop client is the UI; the API has no browser-facing page.
+	srv := &http.Server{Handler: apiSrv}
 	go func() {
 		if err := srv.Serve(ln); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			slog.Error("server error", "error", err)
 		}
 	}()
 
-	if openUI {
-		go openBrowser(uiURL)
-	}
-
 	// Wait for shutdown signal.
 	<-ctx.Done()
 	srv.Close()
 	return mgr.Shutdown(context.Background())
-}
-
-// openBrowser tries to open url in an app-style browser window. It never
-// fails the daemon: chromium --app is preferred (windowed, no chrome), then
-// xdg-open as a fallback, and any failure is silently ignored.
-func openBrowser(url string) {
-	browsers := [][]string{
-		{"chromium", "--app=" + url},
-		{"chromium-browser", "--app=" + url},
-		{"google-chrome", "--app=" + url},
-		{"google-chrome-stable", "--app=" + url},
-	}
-	for _, b := range browsers {
-		if err := exec.Command(b[0], b[1:]...).Start(); err == nil {
-			return
-		}
-	}
-	// Fallback to the desktop's default handler.
-	_ = exec.Command("xdg-open", url).Start()
 }
 
 func run(rawURL, dir, outName string, segments, tries int, timeout time.Duration) error {

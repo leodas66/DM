@@ -869,8 +869,8 @@ func (h *harness) addDownloadWithCategory(t *testing.T, url string, categoryID s
 }
 
 // TestBroadcastWithExternalServer covers the daemon wiring: cmd/dm serves this
-// handler through its own http.Server (wrapped by the embedded web UI) instead
-// of calling ListenAndServe, so it must start broadcasting explicitly. Without
+// handler through its own http.Server instead of calling ListenAndServe, so it
+// must start broadcasting explicitly. Without
 // that call /api/ws upgrades the connection and then never sends a frame.
 func TestBroadcastWithExternalServer(t *testing.T) {
 	dir := t.TempDir()

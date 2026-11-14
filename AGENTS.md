@@ -3,12 +3,12 @@
 ## What this repo is
 A lightweight download manager: a standalone Go daemon (engine, persistence,
 HTTP API + WebSocket events, scheduling, categories, packaging), a browser
-extension, and desktop clients. Phases 0, R and 1–6 of `PLAN.md` are committed;
-a Wails desktop wrapper (`internal/gui/wails`) was added after Phase 6 and is
-not in `PLAN.md`. The approved migration to a native GTK4 client and Native
-Messaging is documented in `docs/ARCHITECTURE.md`. `TESTING.md` holds the check
-matrix and what is still manual; `docs/DECISIONS.md` holds the open provisional
-calls.
+extension, and a GTK4 desktop client. Phases 0, R and 1–6 of `PLAN.md` are
+committed. The approved migration to a native GTK4 client and Native
+Messaging is documented in `docs/ARCHITECTURE.md`; it is complete, and the
+transitional Svelte and Wails trees are gone (D035). `TESTING.md` holds the
+check matrix and what is still manual; `docs/DECISIONS.md` holds the open
+provisional calls.
 
 Read `PROCESS.md` before starting work. It defines how much you decide alone,
 when you must stop, and what counts as done. `docs/DECISIONS.md` records every
@@ -34,12 +34,11 @@ non-obvious call already made — check it before re-litigating a choice.
 
 ## Dependencies
 - Never add one without asking. Stdlib first.
-- Pre-approved: `modernc.org/sqlite`, Svelte + Vite in `ui/` and
-  `internal/gui/wails/frontend`, esbuild in `extension/`, and
+- Pre-approved: `modernc.org/sqlite`, esbuild in `extension/`, and
   `github.com/diamondburned/gotk4/pkg` v0.4.1 for the isolated GTK4 desktop
   module.
-- Already in the tree: Wails v2 for the desktop wrapper (D023), added after the
-  planned phases. Ask before adding anything else.
+- Ask before adding anything else. The Wails wrapper and the Svelte/Vite trees
+  are gone; do not reintroduce a web UI.
 - `chi` and `cobra` are *not* needed — stdlib mux, `flag`, `log/slog`.
 - Module path is `github.com/vishwa/dm` (provisional, D001 in the decision
   log). Binary is `cmd/dm` → `dm`.
@@ -81,26 +80,17 @@ Core packages live in `internal/{model,probe,download,manager,store,api}` plus
 `internal/app` still to come. `desktop/` is an isolated Go module for the GTK4
 client (gotk4); it talks to the daemon over REST/WebSocket and must not be
 imported by the daemon module. `extension/` is a TypeScript MV3 extension using
-Native Messaging. The old `ui/`, Wails frontend and `internal/web` are migration
-targets and must not be deleted until the GTK client has feature parity and
-packaging/tests have moved.
+Native Messaging. The transitional `ui/`, `internal/web` and
+`internal/gui/wails` trees are deleted; git history keeps them.
 
-Migration status: the GTK4 client in `desktop/` covers the main window, filter
-sidebar, virtualized list, Add dialog, delete confirmation, live WebSocket
-updates, preferences, and category management; the daemon publishes
-`$XDG_RUNTIME_DIR/dm/endpoint` so clients find its ephemeral port. The browser
-side exists: `cmd/dm-native-host` plus `internal/nativehost` implement Native
-Messaging (`add`/`ping`), and `extension/` no longer holds a port or token. Not
-built yet: `internal/app`. There is no tray icon, and clipboard support stops
-at pre-filling the Add dialog.
-
-While they remain, both embedded trees (`internal/web/dist` and
-`internal/gui/wails/frontend/dist`) are gitignored except for a tracked
-`.gitkeep`, so `make check` works on a fresh clone without `npm install`.
-`internal/web` embeds `all:dist` and serves a "UI not built" page when
-`dist/index.html` is absent instead of panicking. Build the real bundles with
-`npm run build` in `ui/` or in the desktop frontend directory; each build
-script re-creates the `.gitkeep` that vite's `emptyOutDir` deletes.
+Migration status: complete for 0.2.0. The GTK4 client in `desktop/` covers the
+main window, filter sidebar, virtualized list, Add dialog, delete confirmation,
+live WebSocket updates, preferences, category management, retry, and clipboard
+pre-fill; the daemon publishes `$XDG_RUNTIME_DIR/dm/endpoint` so clients find
+its ephemeral port. The browser side exists: `cmd/dm-native-host` plus
+`internal/nativehost` implement Native Messaging (`add`/`ping`), and
+`extension/` holds no port or token. Not built yet: `internal/app`. There is no
+tray icon.
 
 `scripts/mockserver` is a dev tool for manual checks (`-no-range`,
 `-flaky-every N`), see `TESTING.md`.

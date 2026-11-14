@@ -4,7 +4,7 @@ import "time"
 
 // EventType identifies what changed. It is the discriminator in the JSON
 // frames sent over /api/ws, so the string values are part of the wire
-// contract with the Svelte UI and must not be renamed casually.
+// contract with every client and must not be renamed casually.
 type EventType string
 
 const (

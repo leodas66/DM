@@ -9,10 +9,7 @@ downloading, and a native GTK4 desktop client.
   bearer token.
 - GTK4 client that follows the system theme, with filters, categories,
   preferences, and live progress.
-- Small daemon: no browser engine, no web UI required at runtime.
-
-The embedded web UI from earlier phases still ships in the daemon but is legacy
-and will be removed once the native client has full parity.
+- Small daemon: no browser engine and no web UI to build or ship.
 
 ## Install (Arch)
 
@@ -65,7 +62,6 @@ make desktop                     # bin/dm-desktop (GTK4)
 ```
 
 Run the daemon in a terminal with `./bin/dm --serve`, then `./bin/dm-desktop`.
-Add `--open-ui` to `--serve` only if you want the legacy browser UI.
 
 ## Use the client
 

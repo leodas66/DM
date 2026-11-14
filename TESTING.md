@@ -25,7 +25,8 @@ Then `./bin/dm -d /tmp/out -n 8 http://127.0.0.1:8099/big.bin`.
 |---|---|---|---|
 | `make check` | gofmt clean, vet clean, race tests pass, build ok | pass | 2026-11-01 |
 | `./bin/dm -version` | prints `dm 0.1.0-dev` | pass | 2026-11-01 |
-| Fresh clone, no `npm install` | `make check` green; embedded UI placeholders satisfy both `go:embed` directives | pass — build + vet + tests green in a clone with only `internal/web/dist/.gitkeep` and `internal/gui/wails/frontend/dist/.gitkeep`; `TestHandlerServesAssets` skips with "run `npm run build` in ui/" | 2026-11-14 |
+| Fresh clone, no `npm install` | `make check` green with no asset build step | pass — the daemon no longer embeds a web bundle, so the check runs without Node (D035) | 2026-11-15 |
+
 ## Phase 1: probe + segmented downloader
 
 | Check | Expected | Result | Date |
@@ -83,12 +84,15 @@ Then `./bin/dm -d /tmp/out -n 8 http://127.0.0.1:8099/big.bin`.
 
 ## Phase 5: UI
 
+The original Svelte web UI was removed under D035. Results below are kept as a
+historical record; the GTK4 client is covered in its own section.
+
 | Check | Expected | Result | Date |
 |---|---|---|---|
 | Bundle size | under ~100 KB gzipped | pass — 12.3 KB gzipped total (10.4 KB JS, 1.6 KB CSS, 0.3 KB HTML) | 2026-11-14 |
-| Live progress with tab open | updates without reload | | |
-| Tab closed | daemon RSS still under 20 MB idle | | |
-| Dark/light | both readable, no hardcoded colors | | |
+| Live progress with tab open | updates without reload | superseded by the GTK4 client | — |
+| Tab closed | daemon RSS still under 20 MB idle | superseded by the GTK4 client | — |
+| Dark/light | both readable, no hardcoded colors | superseded by the GTK4 client | — |
 
 ## Phase 6: packaging
 
@@ -98,7 +102,7 @@ Then `./bin/dm -d /tmp/out -n 8 http://127.0.0.1:8099/big.bin`.
 | Login on a fresh user | daemon running, token created 0600 | not run — same | — |
 | Uninstall | no orphan config or data | not run — same | — |
 
-## GTK4 desktop client (first slice)
+## GTK4 desktop client
 
 Run against `scripts/mockserver` on `127.0.0.1:8099` with a real `dm --serve`
 daemon; the client used the published `$XDG_RUNTIME_DIR/dm/endpoint` and the
@@ -148,13 +152,13 @@ Record any check skipped, with the reason and the phase it was moved to.
 | 2 | Destination directory removed mid-download | Manual filesystem check; not automated |
 | 3 | SIGTERM during download | Needs a real daemon process; `Manager.Shutdown` is covered indirectly |
 | 6 | `makepkg -si`, fresh-login, uninstall | Requires an Arch host; `makepkg`/`pacman` are unavailable in this environment |
-| 6 | Desktop app (Wails) launch and shutdown | Not in PLAN; needs a desktop session plus the Wails toolchain, so it is not part of `make check` |
+| 6 | Desktop app launch and shutdown | The Wails wrapper is gone (D035); the GTK4 client is covered by `make check-desktop` and the GTK4 section above |
 | GTK4 | Orca and GTK Inspector accessibility pass | Needs a full screen-reader session; labels and roles are implemented but not audited with Orca |
 | GTK4 | High-contrast and large-text appearance | Needs a separate GTK theme/settings session; no clipping was observed under the default font |
 | GTK4 | Light appearance | Only Breeze dark was available during the live check |
 | GTK4 | Confirm delete end-to-end | Destructive check on seeded files; the confirmation flow was rendered but not confirmed |
 | 6 | `makepkg -si` installs daemon, client, unit, desktop entry, icon | `makepkg`/`pacman` are unavailable here; `bash -n PKGBUILD`, `desktop-file-validate`, and the source tag were checked instead |
-| 6 | `dm --serve` without `--open-ui` opens no browser and prints no token | needs a fresh terminal run after installing the package |
+| 6 | `dm --serve` opens no browser and prints no token | needs a fresh terminal run after installing the package |
 | 4 | Extension loaded in Chrome | No Chrome available; the build output and host protocol are tested, the browser UI is not |
 | 4 | Extension loaded in Firefox | No Firefox available; same |
 | 4 | Chrome per-user host manifest in place | The extension ID only exists after loading the extension, so this is a manual install step |

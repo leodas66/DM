@@ -22,22 +22,6 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-
-      - name: Build embedded web UI
-        working-directory: ui
-        run: |
-          npm install --no-package-lock
-          npm run build
-
-      - name: Build Wails UI
-        working-directory: internal/gui/wails/frontend
-        run: |
-          npm install --no-package-lock
-          npm run build
-
       - name: Format, vet, race tests, and build
         run: ./scripts/check.sh
 

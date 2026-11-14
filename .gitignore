@@ -3,15 +3,7 @@
 *.test
 *.out
 
-# UI and extension
-/ui/node_modules/
-/ui/dist/
-/internal/web/dist/*
-!/internal/web/dist/.gitkeep
-/internal/gui/wails/frontend/dist/*
-!/internal/gui/wails/frontend/dist/.gitkeep
-/internal/gui/wails/frontend/node_modules/
-/internal/gui/wails/frontend/package-lock.json
+# Extension build output
 /extension/node_modules/
 /extension/dist/
 /extension/web-ext-artifacts/
