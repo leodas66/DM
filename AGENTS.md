@@ -62,7 +62,7 @@ non-obvious call already made — check it before re-litigating a choice.
 
 ## Layout (PLAN §4)
 `cmd/dm`, `internal/{model,probe,download,manager,store,api,web}`, `ui/`
-(Svelte), `extension/` (TypeScript MV3). The built UI is embedded via
+(Svelte), `extension/` (TypeScript). The built UI is embedded via
 `go:embed` in `internal/web` and served at `/`. `scripts/mockserver` is a dev
 tool for manual checks (`-no-range`, `-flaky-every N`), see `TESTING.md`.
 
@@ -89,7 +89,7 @@ route is wired, what changed.
 | `search_code` | Text search inside indexed files (grep-like) |
 
 Prefer graph tools over file-by-file exploration: a single `search_graph` call
-returns what would take dozens of `grep`/`Read` calls, at ~500 tokens vs ~80K.
+returns what would take dozens of `grep`/Read calls, at ~500 tokens vs ~80K.
 
 The MCP server is registered in `kilo.json`, `.mcp.json`, and
 `~/.config/opencode/opencode.json` — all agents share one SQLite graph at
@@ -99,3 +99,12 @@ changes; reindex manually with:
 ```
 codebase-memory-mcp cli index_repository '{"repo_path": "/home/vishwa/Projects/project1"}'
 ```
+
+## GTK4 UI skills
+- Project-local skills are in `.agents/skills/`; start with
+  `dm-ui-router` for GTK4 desktop tasks.
+- Load only the smallest relevant set (normally one, never more than three).
+- `docs/GTK4-DESIGN-SPEC.md` is authoritative over skill recommendations.
+- These skills apply only to the GTK4 desktop client. They do not change the
+  current daemon/CLI phase or authorize GTK, Qt, Libadwaita, or other new
+  dependencies. See `docs/UI-SKILLS.md` for provenance and update policy.
