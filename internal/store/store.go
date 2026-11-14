@@ -56,6 +56,10 @@ var migrations = []string{
 		created_at  INTEGER NOT NULL
 	);
 	CREATE INDEX categories_name ON categories(name);`,
+	`CREATE TABLE settings (
+		key   TEXT PRIMARY KEY,
+		value TEXT NOT NULL
+	);`,
 }
 
 // Store is a handle to the SQLite database.
@@ -282,6 +286,28 @@ func (s *Store) DeleteCategory(ctx context.Context, id string) error {
 		return err
 	}
 	_, err := s.db.ExecContext(ctx, `DELETE FROM categories WHERE id = ?`, id)
+	return err
+}
+
+// GetSetting returns a stored setting value, or ErrNotFound when it was never
+// written. Values are opaque strings: the store does not interpret them.
+func (s *Store) GetSetting(ctx context.Context, key string) (string, error) {
+	var value string
+	err := s.db.QueryRowContext(ctx, `SELECT value FROM settings WHERE key = ?`, key).Scan(&value)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", ErrNotFound
+	}
+	if err != nil {
+		return "", err
+	}
+	return value, nil
+}
+
+// PutSetting writes one setting value, replacing any previous value.
+func (s *Store) PutSetting(ctx context.Context, key, value string) error {
+	_, err := s.db.ExecContext(ctx, `
+		INSERT INTO settings (key, value) VALUES (?, ?)
+		ON CONFLICT(key) DO UPDATE SET value = excluded.value`, key, value)
 	return err
 }
 

@@ -36,7 +36,10 @@ type window struct {
 	loaded      bool
 	categories  []model.Category
 	defaultDir  string
+	settings    dmapi.Settings
 	addDialog   *addDialog
+	prefsDialog *preferencesDialog
+	catsDialog  *categoriesDialog
 	rowTimer    coreglib.SourceHandle
 	toastSource coreglib.SourceHandle
 	retryCh     chan struct{}
@@ -158,8 +161,14 @@ func (w *window) build() {
 	header.PackEnd(addButton)
 
 	menu := gio.NewMenu()
-	menu.Append("About DM", "app.about")
-	menu.Append("Quit", "app.quit")
+	primary := gio.NewMenu()
+	primary.Append("Preferences", "win.preferences")
+	primary.Append("Categories\u2026", "win.categories")
+	menu.AppendSection("", primary)
+	secondary := gio.NewMenu()
+	secondary.Append("About DM", "app.about")
+	secondary.Append("Quit", "app.quit")
+	menu.AppendSection("", secondary)
 	menuButton := gtk.NewMenuButton()
 	menuButton.SetIconName("open-menu-symbolic")
 	menuButton.SetHasFrame(false)
@@ -198,10 +207,23 @@ func (w *window) build() {
 	addAction := gio.NewSimpleAction("add", nil)
 	addAction.ConnectActivate(func(*glib.Variant) { w.showAddDialog() })
 	w.win.AddAction(addAction)
+
+	prefsAction := gio.NewSimpleAction("preferences", nil)
+	prefsAction.ConnectActivate(func(*glib.Variant) { w.showPreferences() })
+	w.win.AddAction(prefsAction)
+
+	catsAction := gio.NewSimpleAction("categories", nil)
+	catsAction.ConnectActivate(func(*glib.Variant) { w.showCategories() })
+	w.win.AddAction(catsAction)
+
 	controller := gtk.NewShortcutController()
 	controller.AddShortcut(gtk.NewShortcut(
 		gtk.NewShortcutTriggerParseString("<Control>n"),
 		gtk.NewNamedAction("win.add"),
+	))
+	controller.AddShortcut(gtk.NewShortcut(
+		gtk.NewShortcutTriggerParseString("<Control>comma"),
+		gtk.NewNamedAction("win.preferences"),
 	))
 	w.win.AddController(controller)
 
@@ -259,12 +281,18 @@ func (w *window) buildSidebar() *gtk.Box {
 	inner.Append(w.filterList)
 
 	w.categoryBox = gtk.NewBox(gtk.OrientationVertical, 0)
-	categoryHeader := newDimLabel("Categories")
-	categoryHeader.AddCSSClass("caption")
+	categoryHeader := gtk.NewBox(gtk.OrientationHorizontal, 4)
 	categoryHeader.SetMarginTop(12)
 	categoryHeader.SetMarginBottom(2)
 	categoryHeader.SetMarginStart(10)
-	categoryHeader.SetMarginEnd(10)
+	categoryHeader.SetMarginEnd(6)
+	categoryLabel := newDimLabel("Categories")
+	categoryLabel.AddCSSClass("caption")
+	categoryLabel.SetHExpand(true)
+	categoryHeader.Append(categoryLabel)
+	newCategory := newIconButton("list-add-symbolic", "New category")
+	newCategory.ConnectClicked(func() { w.showCategories() })
+	categoryHeader.Append(newCategory)
 	w.categoryBox.Append(categoryHeader)
 
 	w.categoryList = gtk.NewListBox()
@@ -622,6 +650,7 @@ func (w *window) post(f func()) {
 func (w *window) onSnapshot(client *dmapi.Client, list []model.Download, categories []model.Category, settings dmapi.Settings) {
 	w.client = client
 	w.loaded = true
+	w.settings = settings
 	w.defaultDir = settings.Dir
 	w.store.replaceAll(list)
 	w.updateCategories(categories)
@@ -838,7 +867,6 @@ func (w *window) updateCategories(categories []model.Category) {
 		w.categoryRows = append(w.categoryRows, &categoryRow{filter: f, row: row, count: count})
 		w.categoryByRow[row] = f
 	}
-	w.categoryBox.SetVisible(len(categories) > 0)
 
 	if w.filter.kind == filterCategory && !w.categoryExists(w.filter.categoryID) {
 		w.setFilterSilently(filter{kind: filterAll, label: "All Downloads"})
@@ -1054,6 +1082,42 @@ func (w *window) showAddDialog() {
 	w.addDialog = d
 	d.win.ConnectCloseRequest(func() bool {
 		w.addDialog = nil
+		return false
+	})
+	d.present()
+}
+
+func (w *window) showPreferences() {
+	if w.client == nil {
+		w.toast("Not connected to the DM daemon.")
+		return
+	}
+	if w.prefsDialog != nil {
+		w.prefsDialog.present()
+		return
+	}
+	d := newPreferencesDialog(w)
+	w.prefsDialog = d
+	d.win.ConnectCloseRequest(func() bool {
+		w.prefsDialog = nil
+		return false
+	})
+	d.present()
+}
+
+func (w *window) showCategories() {
+	if w.client == nil {
+		w.toast("Not connected to the DM daemon.")
+		return
+	}
+	if w.catsDialog != nil {
+		w.catsDialog.present()
+		return
+	}
+	d := newCategoriesDialog(w)
+	w.catsDialog = d
+	d.win.ConnectCloseRequest(func() bool {
+		w.catsDialog = nil
 		return false
 	})
 	d.present()

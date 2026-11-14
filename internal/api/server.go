@@ -454,7 +454,10 @@ func (s *Server) handleSettingsPut(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, errorResponse{Error: err.Error()})
 		return
 	}
-	s.mgr.UpdateSettings(st)
+	if err := s.mgr.UpdateSettings(st); err != nil {
+		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: err.Error()})
+		return
+	}
 
 	current := s.mgr.Settings()
 	writeJSON(w, http.StatusOK, settingsResponse{

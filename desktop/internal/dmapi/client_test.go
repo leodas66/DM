@@ -232,3 +232,93 @@ func TestDownloadedSumsSegments(t *testing.T) {
 		t.Errorf("Downloaded = %d, want 42", got)
 	}
 }
+
+func TestUpdateSettingsReplacesWholeRecord(t *testing.T) {
+	c := testClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if !requireAuth(t, r) {
+			return
+		}
+		if r.Method != http.MethodPut || r.URL.Path != "/api/settings" {
+			t.Errorf("request = %s %s", r.Method, r.URL.Path)
+			return
+		}
+		var got Settings
+		if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
+			t.Errorf("decode request: %v", err)
+			return
+		}
+		// A partial body would let the daemon reset the fields we left out.
+		if got.Dir != "/downloads" || got.MaxConcurrent != 4 || got.Connections != 6 ||
+			got.GlobalLimit != 1<<20 || got.PerDownloadLimit != 1<<19 ||
+			got.MinSegmentSize != 1<<20 || got.SaveInterval != "1s" {
+			t.Errorf("settings body = %+v", got)
+		}
+		json.NewEncoder(w).Encode(got)
+	})
+
+	settings, err := c.UpdateSettings(context.Background(), Settings{
+		Dir:              "/downloads",
+		MaxConcurrent:    4,
+		Connections:      6,
+		MinSegmentSize:   1 << 20,
+		GlobalLimit:      1 << 20,
+		PerDownloadLimit: 1 << 19,
+		SaveInterval:     "1s",
+	})
+	if err != nil {
+		t.Fatalf("UpdateSettings: %v", err)
+	}
+	if settings.MaxConcurrent != 4 || settings.Dir != "/downloads" {
+		t.Fatalf("UpdateSettings = %+v", settings)
+	}
+}
+
+func TestAddCategory(t *testing.T) {
+	c := testClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if !requireAuth(t, r) {
+			return
+		}
+		if r.Method != http.MethodPost || r.URL.Path != "/api/categories" {
+			t.Errorf("request = %s %s", r.Method, r.URL.Path)
+			return
+		}
+		var req struct {
+			Name       string `json:"name"`
+			DefaultDir string `json:"defaultDir"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			t.Errorf("decode request: %v", err)
+			return
+		}
+		if req.Name != "Videos" || req.DefaultDir != "/videos" {
+			t.Errorf("request = %+v", req)
+		}
+		w.WriteHeader(http.StatusCreated)
+		json.NewEncoder(w).Encode(model.Category{ID: "c1", Name: req.Name, DefaultDir: req.DefaultDir})
+	})
+
+	cat, err := c.AddCategory(context.Background(), "Videos", "/videos")
+	if err != nil {
+		t.Fatalf("AddCategory: %v", err)
+	}
+	if cat.ID != "c1" || cat.Name != "Videos" {
+		t.Fatalf("AddCategory = %+v", cat)
+	}
+}
+
+func TestDeleteCategory(t *testing.T) {
+	c := testClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if !requireAuth(t, r) {
+			return
+		}
+		if r.Method != http.MethodDelete || r.URL.Path != "/api/categories/c1" {
+			t.Errorf("request = %s %s", r.Method, r.URL.Path)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	})
+
+	if err := c.DeleteCategory(context.Background(), "c1"); err != nil {
+		t.Fatalf("DeleteCategory: %v", err)
+	}
+}

@@ -87,8 +87,8 @@ packaging/tests have moved.
 Migration status: the first GTK4 slice exists in `desktop/` (main window, filter
 sidebar, virtualized list, Add dialog, delete confirmation, live WebSocket
 updates) and the daemon publishes `$XDG_RUNTIME_DIR/dm/endpoint` so clients find
-its ephemeral port. Not built yet: `cmd/dm-native-host`, `internal/app`,
-preferences, and category management in the client.
+its ephemeral port, plus preferences and category management. Not built yet:
+`cmd/dm-native-host`, `internal/app`, and retry for failed downloads.
 
 While they remain, both embedded trees (`internal/web/dist` and
 `internal/gui/wails/frontend/dist`) are gitignored except for a tracked

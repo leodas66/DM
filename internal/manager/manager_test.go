@@ -963,3 +963,119 @@ func TestScheduledDownloadPersistedAcrossRestart(t *testing.T) {
 		t.Fatalf("StartAt after restart = %v, want %v", got.StartAt, start)
 	}
 }
+
+func TestSettingsPersistAcrossRestart(t *testing.T) {
+	dir := t.TempDir()
+	st, err := store.Open(filepath.Join(dir, "dm.db"))
+	if err != nil {
+		t.Fatalf("store.Open: %v", err)
+	}
+	defer st.Close()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	first := New(st, Settings{
+		Dir:           filepath.Join(dir, "first"),
+		MaxConcurrent: 3,
+		Connections:   8,
+	}, nil)
+	if err := first.Start(ctx); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	// A fresh database keeps the constructor's defaults instead of starting
+	// from an empty settings record.
+	if _, err := st.GetSetting(context.Background(), settingsKey); err != nil {
+		t.Fatalf("defaults were not persisted on first start: %v", err)
+	}
+	if got := first.Settings().Dir; got != filepath.Join(dir, "first") {
+		t.Fatalf("initial Dir = %q", got)
+	}
+
+	want := Settings{
+		Dir:              filepath.Join(dir, "second"),
+		MaxConcurrent:    5,
+		Connections:      2,
+		MinSegmentSize:   2 << 20,
+		GlobalLimit:      1 << 20,
+		PerDownloadLimit: 1 << 19,
+		SaveInterval:     250 * time.Millisecond,
+	}
+	if err := first.UpdateSettings(want); err != nil {
+		t.Fatalf("UpdateSettings: %v", err)
+	}
+	sctx, scancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer scancel()
+	if err := first.Shutdown(sctx); err != nil {
+		t.Fatalf("Shutdown: %v", err)
+	}
+
+	// A restart must not fall back to the constructor's values.
+	second := New(st, Settings{Dir: filepath.Join(dir, "ignored")}, nil)
+	ctx2, cancel2 := context.WithCancel(context.Background())
+	defer cancel2()
+	if err := second.Start(ctx2); err != nil {
+		t.Fatalf("Start second: %v", err)
+	}
+	defer func() {
+		sctx2, scancel2 := context.WithTimeout(context.Background(), 5*time.Second)
+		defer scancel2()
+		_ = second.Shutdown(sctx2)
+	}()
+
+	got := second.Settings()
+	if got != want {
+		t.Fatalf("settings after restart = %+v, want %+v", got, want)
+	}
+}
+
+func TestFinishedDownloadsSurviveRestart(t *testing.T) {
+	dir := t.TempDir()
+	st, err := store.Open(filepath.Join(dir, "dm.db"))
+	if err != nil {
+		t.Fatalf("store.Open: %v", err)
+	}
+	defer st.Close()
+
+	// A terminal record that the loop will not reload on Start.
+	done := model.Download{
+		ID:        "done1",
+		URL:       "https://example.com/a.bin",
+		FinalURL:  "https://cdn.example.com/a.bin",
+		Filename:  "a.bin",
+		Dir:       dir,
+		Size:      4,
+		Status:    model.StatusCompleted,
+		CreatedAt: time.Now().UTC().Add(-time.Minute),
+	}
+	if err := st.Save(context.Background(), done); err != nil {
+		t.Fatalf("store.Save: %v", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	m := New(st, Settings{Dir: dir}, nil)
+	if err := m.Start(ctx); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	defer func() {
+		sctx, c := context.WithTimeout(context.Background(), 5*time.Second)
+		defer c()
+		_ = m.Shutdown(sctx)
+	}()
+
+	list, err := m.List(context.Background())
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(list) != 1 || list[0].ID != done.ID || list[0].Status != model.StatusCompleted {
+		t.Fatalf("List after restart = %+v, want the stored completed download", list)
+	}
+	got, err := m.Get(context.Background(), done.ID)
+	if err != nil {
+		t.Fatalf("Get after restart: %v", err)
+	}
+	if got.Filename != done.Filename || got.Status != model.StatusCompleted {
+		t.Fatalf("Get after restart = %+v", got)
+	}
+}

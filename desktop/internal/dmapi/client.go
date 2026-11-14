@@ -113,10 +113,16 @@ func (e *APIError) Error() string {
 	return e.Message
 }
 
-// Settings mirrors GET /api/settings. Only the fields the desktop client uses
-// are modelled; unknown JSON fields are ignored.
+// Settings mirrors GET/PUT /api/settings. Keep every field: the daemon
+// replaces the whole settings record, so a partial update would reset the rest.
 type Settings struct {
-	Dir string `json:"dir"`
+	Dir              string `json:"dir"`
+	MaxConcurrent    int    `json:"maxConcurrent"`
+	Connections      int    `json:"connections"`
+	MinSegmentSize   int64  `json:"minSegmentSize"`
+	GlobalLimit      int64  `json:"globalLimit"`
+	PerDownloadLimit int64  `json:"perDownloadLimit"`
+	SaveInterval     string `json:"saveInterval"`
 }
 
 // AddRequest is a new download. Secrets (headers, cookies, referrer) are not
@@ -168,6 +174,34 @@ func (c *Client) Settings(ctx context.Context) (Settings, error) {
 		return Settings{}, err
 	}
 	return out, nil
+}
+
+// UpdateSettings replaces the daemon settings and returns the stored values.
+func (c *Client) UpdateSettings(ctx context.Context, settings Settings) (Settings, error) {
+	var out Settings
+	if err := c.do(ctx, http.MethodPut, "/api/settings", settings, &out); err != nil {
+		return Settings{}, err
+	}
+	return out, nil
+}
+
+// AddCategory creates a category, optionally with a default folder.
+func (c *Client) AddCategory(ctx context.Context, name, defaultDir string) (model.Category, error) {
+	var out model.Category
+	req := struct {
+		Name       string `json:"name"`
+		DefaultDir string `json:"defaultDir"`
+	}{Name: name, DefaultDir: defaultDir}
+	if err := c.do(ctx, http.MethodPost, "/api/categories", req, &out); err != nil {
+		return model.Category{}, err
+	}
+	return out, nil
+}
+
+// DeleteCategory removes a category. Downloads keep their files; the category
+// association is what disappears.
+func (c *Client) DeleteCategory(ctx context.Context, id string) error {
+	return c.do(ctx, http.MethodDelete, "/api/categories/"+url.PathEscape(id), nil, nil)
 }
 
 // Add submits a new download and returns the accepted record.

@@ -309,3 +309,28 @@ func TestDownloadStartAtRoundTrip(t *testing.T) {
 		t.Fatalf("Status = %s, want %s", got.Status, model.StatusPaused)
 	}
 }
+
+func TestSettingsRoundTrip(t *testing.T) {
+	ctx := context.Background()
+	s := openTemp(t)
+
+	if _, err := s.GetSetting(ctx, "settings"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("GetSetting before write = %v, want ErrNotFound", err)
+	}
+	if err := s.PutSetting(ctx, "settings", `{"dir":"/a"}`); err != nil {
+		t.Fatalf("PutSetting: %v", err)
+	}
+	got, err := s.GetSetting(ctx, "settings")
+	if err != nil {
+		t.Fatalf("GetSetting: %v", err)
+	}
+	if got != `{"dir":"/a"}` {
+		t.Fatalf("GetSetting = %q", got)
+	}
+	if err := s.PutSetting(ctx, "settings", `{"dir":"/b"}`); err != nil {
+		t.Fatalf("PutSetting overwrite: %v", err)
+	}
+	if got, _ := s.GetSetting(ctx, "settings"); got != `{"dir":"/b"}` {
+		t.Fatalf("GetSetting after overwrite = %q", got)
+	}
+}

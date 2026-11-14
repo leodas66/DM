@@ -71,6 +71,15 @@ func main() {
 	}
 }
 
+// defaultDownloadDir is the destination for a daemon that has no settings yet.
+func defaultDownloadDir() string {
+	home, err := os.UserHomeDir()
+	if err != nil || home == "" {
+		return "."
+	}
+	return filepath.Join(home, "Downloads")
+}
+
 // runServe starts the daemon: SQLite store, Manager, API server, and the
 // embedded web UI, all on a single 127.0.0.1 listener. It runs until
 // SIGINT/SIGTERM, then shuts down gracefully.
@@ -93,8 +102,9 @@ func runServe() error {
 	}
 	defer st.Close()
 
-	// Create and start the Manager.
-	mgr := manager.New(st, manager.Settings{}, nil)
+	// Create and start the Manager. A fresh database gets ~/Downloads: a
+	// systemd user unit starts in $HOME, and "." would scatter files there.
+	mgr := manager.New(st, manager.Settings{Dir: defaultDownloadDir()}, nil)
 	if err := mgr.Start(ctx); err != nil {
 		return err
 	}

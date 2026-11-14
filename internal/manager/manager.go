@@ -8,11 +8,14 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -142,14 +145,96 @@ func New(st *store.Store, settings Settings, client *http.Client) *Manager {
 	}
 }
 
-// Start reloads unfinished downloads from the store and starts the loop.
-// Queued, probing and running downloads are re-queued; paused ones stay
-// paused. The context bounds the manager's lifetime.
+// Start loads persisted settings, reloads unfinished downloads from the store
+// and starts the loop. Queued, probing and running downloads are re-queued;
+// paused ones stay paused. The context bounds the manager's lifetime.
 func (m *Manager) Start(ctx context.Context) error {
+	if err := m.loadSettings(ctx); err != nil {
+		return err
+	}
 	if err := m.reload(ctx); err != nil {
 		return err
 	}
 	go m.loop(ctx)
+	return nil
+}
+
+// settingsKey is the settings row; there is exactly one.
+const settingsKey = "settings"
+
+// settingsRecord is the stored form of Settings. Durations are kept in
+// nanoseconds so the record does not depend on Go's duration strings.
+type settingsRecord struct {
+	Dir               string `json:"dir"`
+	MaxConcurrent     int    `json:"maxConcurrent"`
+	Connections       int    `json:"connections"`
+	MinSegmentSize    int64  `json:"minSegmentSize"`
+	GlobalLimit       int64  `json:"globalLimit"`
+	PerDownloadLimit  int64  `json:"perDownloadLimit"`
+	SaveIntervalNanos int64  `json:"saveIntervalNanos"`
+}
+
+func (s Settings) record() settingsRecord {
+	return settingsRecord{
+		Dir:               s.Dir,
+		MaxConcurrent:     s.MaxConcurrent,
+		Connections:       s.Connections,
+		MinSegmentSize:    s.MinSegmentSize,
+		GlobalLimit:       s.GlobalLimit,
+		PerDownloadLimit:  s.PerDownloadLimit,
+		SaveIntervalNanos: int64(s.SaveInterval),
+	}
+}
+
+func (r settingsRecord) settings() Settings {
+	return Settings{
+		Dir:              r.Dir,
+		MaxConcurrent:    r.MaxConcurrent,
+		Connections:      r.Connections,
+		MinSegmentSize:   r.MinSegmentSize,
+		GlobalLimit:      r.GlobalLimit,
+		PerDownloadLimit: r.PerDownloadLimit,
+		SaveInterval:     time.Duration(r.SaveIntervalNanos),
+	}
+}
+
+// loadSettings replaces the constructor's settings with the persisted record.
+// With nothing stored, the constructor's values are written so the first
+// GET /api/settings already matches what the daemon will use.
+func (m *Manager) loadSettings(ctx context.Context) error {
+	raw, err := m.store.GetSetting(ctx, settingsKey)
+	if errors.Is(err, store.ErrNotFound) {
+		return m.persistSettings(ctx)
+	}
+	if err != nil {
+		return fmt.Errorf("manager: read settings: %w", err)
+	}
+	var rec settingsRecord
+	if err := json.Unmarshal([]byte(raw), &rec); err != nil {
+		// A damaged record must not stop the daemon from serving downloads.
+		slog.Warn("manager: stored settings unreadable; using defaults", "err", err)
+		return m.persistSettings(ctx)
+	}
+	m.settingsMu.Lock()
+	m.settings = rec.settings().withDefaults()
+	m.settingsMu.Unlock()
+	return nil
+}
+
+// persistSettings writes the current settings. The Manager is the only writer
+// to the store, so this stays a Manager method.
+func (m *Manager) persistSettings(ctx context.Context) error {
+	m.settingsMu.Lock()
+	current := m.settings
+	m.settingsMu.Unlock()
+
+	raw, err := json.Marshal(current.record())
+	if err != nil {
+		return fmt.Errorf("manager: encode settings: %w", err)
+	}
+	if err := m.store.PutSetting(ctx, settingsKey, string(raw)); err != nil {
+		return fmt.Errorf("manager: save settings: %w", err)
+	}
 	return nil
 }
 
@@ -269,6 +354,34 @@ func (m *Manager) Remove(ctx context.Context, id string, deleteFile bool) error 
 }
 
 // List returns every download, oldest first.
+// list merges the live items with finished downloads in the store. The loop
+// only reloads unfinished downloads on Start, so without the second half a
+// restart would make completed and failed history disappear from the API.
+func (m *Manager) list(ctx context.Context) ([]model.Download, error) {
+	stored, err := m.store.List(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]model.Download, 0, len(stored)+len(m.items))
+	for _, d := range stored {
+		if _, live := m.items[d.ID]; live {
+			// The loop's copy is fresher: progress may not be saved yet.
+			continue
+		}
+		out = append(out, d)
+	}
+	for _, id := range m.order {
+		out = append(out, m.items[id].d)
+	}
+	sort.SliceStable(out, func(i, j int) bool {
+		if out[i].CreatedAt.Equal(out[j].CreatedAt) {
+			return out[i].ID < out[j].ID
+		}
+		return out[i].CreatedAt.Before(out[j].CreatedAt)
+	})
+	return out, nil
+}
+
 func (m *Manager) List(ctx context.Context) ([]model.Download, error) {
 	r := m.call(ctx, command{kind: cmdList})
 	return r.list, r.err
@@ -310,14 +423,16 @@ func (m *Manager) Settings() Settings {
 	return m.settings
 }
 
-// UpdateSettings replaces the manager settings. Rate-limited fields take
-// effect immediately; structural fields (Dir, Connections, MinSegmentSize)
-// apply to newly added downloads.
-func (m *Manager) UpdateSettings(s Settings) {
+// UpdateSettings replaces the manager settings and persists them. Rate-limited
+// fields take effect immediately; structural fields (Dir, Connections,
+// MinSegmentSize) apply to newly added downloads.
+func (m *Manager) UpdateSettings(s Settings) error {
+	s = s.withDefaults()
 	m.settingsMu.Lock()
-	m.settings = s.withDefaults()
+	m.settings = s
 	m.settingsMu.Unlock()
 	m.global.SetRate(s.GlobalLimit)
+	return m.persistSettings(context.Background())
 }
 
 // Shutdown pauses running downloads, persists them and stops the loop.
@@ -370,16 +485,15 @@ func (m *Manager) handle(ctx context.Context, c command) (stop bool) {
 	case cmdRemove:
 		c.reply <- m.remove(ctx, c.id, c.deleteFile)
 	case cmdList:
-		list := make([]model.Download, 0, len(m.order))
-		for _, id := range m.order {
-			list = append(list, m.items[id].d)
-		}
-		c.reply <- result{list: list}
+		list, err := m.list(ctx)
+		c.reply <- result{list: list, err: err}
 	case cmdGet:
 		if it, ok := m.items[c.id]; ok {
 			c.reply <- result{download: it.d}
+		} else if d, err := m.store.Get(ctx, c.id); err != nil {
+			c.reply <- result{err: err}
 		} else {
-			c.reply <- result{err: store.ErrNotFound}
+			c.reply <- result{download: d}
 		}
 	case cmdAddCategory:
 		if err := m.store.SaveCategory(ctx, c.category); err != nil {

@@ -135,9 +135,10 @@ browser extension's direct HTTP transport.
    Svelte/Vite dependencies. Remove obsolete frontend build workflows and docs.
 
 Status 2026-11-14: step 2 is done (`internal/runtime`, published by
-`cmd/dm --serve`). Step 5 has started: the first GTK slice in `desktop/` covers
-the main window, filters, list, add, delete confirmation, and live progress;
-preferences and category management are still missing. Steps 1, 3, 4, 6, and 7
-are not started.
+`cmd/dm --serve`). Step 3 is done for the main surface: the GTK client in
+`desktop/` covers the main window, filters, list, add, delete confirmation, live
+progress, preferences, and category management. Retry is still missing because
+the API has no endpoint for it. Steps 1, 2, 4, 6, and 7 are not started; step 4
+(removing the legacy web UI) stays blocked until parity is complete.
 
 Do not delete the old UI until step 5 and the packaging checks are green.

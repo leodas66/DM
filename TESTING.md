@@ -111,6 +111,10 @@ existing 0600 token. Screenshots were taken of each state.
 | Keyboard | Ctrl+N opens Add Download, Escape dismisses dialogs | pass | 2026-11-14 |
 | Light and dark appearance | readable in both without app colors | partial — verified under Breeze dark only | 2026-11-14 |
 | Confirm delete actually removes | file gone, row gone, daemon state updated | not run — the confirmation was opened but not confirmed | — |
+| Preferences dialog | opens from the app menu, shows stored values, rejects an empty folder inline, saving closes it and updates the daemon | pass — menu action opened it; save applied dir/concurrency/connections/limits and preserved `minSegmentSize`/`saveInterval` | 2026-11-14 |
+| Settings persistence | settings survive a daemon restart | pass — `PUT` then `SIGTERM`/restart returned the same record | 2026-11-14 |
+| Category management | create with a default folder, list it, delete it; sidebar refreshes | pass — created and deleted through the dialog against the live daemon, sidebar rows 2 → 3 → 2 | 2026-11-14 |
+| History after restart | completed/failed/canceled downloads still listed | pass — 9 downloads before and after a daemon restart | 2026-11-14 |
 
 ## Deferred checks
 
