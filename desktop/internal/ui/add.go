@@ -26,7 +26,9 @@ type addDialog struct {
 	formErrorLabel *gtk.Label
 
 	addButton  *gtk.Button
+	urlHint    *gtk.Label
 	submitting bool
+	prefilling bool
 }
 
 func newAddDialog(w *window) *addDialog {
@@ -63,6 +65,12 @@ func newAddDialog(w *window) *addDialog {
 	d.urlEntry.SetActivatesDefault(true)
 	content.Append(fieldLabel("_URL", d.urlEntry))
 	content.Append(d.urlEntry)
+
+	d.urlHint = newDimLabel("Link taken from the clipboard.")
+	d.urlHint.AddCSSClass("caption")
+	d.urlHint.SetVisible(false)
+	content.Append(d.urlHint)
+
 	d.urlErrorBox, d.urlErrorLabel = errorRow()
 	content.Append(d.urlErrorBox)
 
@@ -101,7 +109,10 @@ func newAddDialog(w *window) *addDialog {
 	))
 	d.win.AddController(controller)
 
-	d.urlEntry.ConnectChanged(func() { d.validate() })
+	d.urlEntry.ConnectChanged(func() {
+		d.hideClipboardHint()
+		d.validate()
+	})
 	d.dirEntry.ConnectChanged(func() { d.clearFormError() })
 	d.nameEntry.ConnectChanged(func() { d.clearFormError() })
 
@@ -142,6 +153,7 @@ func errorRow() (*gtk.Box, *gtk.Label) {
 
 func (d *addDialog) present() {
 	d.win.Present()
+	d.prefillFromClipboard()
 	d.urlEntry.GrabFocus()
 	d.validate()
 }

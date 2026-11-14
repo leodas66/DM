@@ -124,6 +124,7 @@ existing 0600 token. Screenshots were taken of each state.
 | Settings persistence | settings survive a daemon restart | pass — `PUT` then `SIGTERM`/restart returned the same record | 2026-11-14 |
 | Category management | create with a default folder, list it, delete it; sidebar refreshes | pass — created and deleted through the dialog against the live daemon, sidebar rows 2 → 3 → 2 | 2026-11-14 |
 | History after restart | completed/failed/canceled downloads still listed | pass — 9 downloads before and after a daemon restart | 2026-11-14 |
+| Clipboard prefill | Add dialog fills an empty URL from a copied link, shows where it came from, and never overwrites typing | pass — prefilled `https://example.com/from-clipboard.iso` with the hint visible and Add enabled; typing another value kept it and hid the hint | 2026-11-15 |
 
 ## Deferred checks
 

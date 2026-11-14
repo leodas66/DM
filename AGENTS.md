@@ -91,8 +91,8 @@ updates, preferences, and category management; the daemon publishes
 `$XDG_RUNTIME_DIR/dm/endpoint` so clients find its ephemeral port. The browser
 side exists: `cmd/dm-native-host` plus `internal/nativehost` implement Native
 Messaging (`add`/`ping`), and `extension/` no longer holds a port or token. Not
-built yet: `internal/app`, retry for failed downloads, clipboard link capture,
-and the tray icon.
+built yet: `internal/app`, retry for failed downloads, and the tray icon.
+Clipboard support stops at pre-filling the Add dialog.
 
 While they remain, both embedded trees (`internal/web/dist` and
 `internal/gui/wails/frontend/dist`) are gitignored except for a tracked
