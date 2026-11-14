@@ -2,12 +2,18 @@ name: ci
 
 on:
   push:
-    branches: [main]
+    branches: [main, architecture/native-gtk4]
   pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
 
 jobs:
   check:
+    name: Go checks
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
 
@@ -16,5 +22,21 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      - name: Verify
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Build embedded web UI
+        working-directory: ui
+        run: |
+          npm install --no-package-lock
+          npm run build
+
+      - name: Build Wails UI
+        working-directory: internal/gui/wails/frontend
+        run: |
+          npm install --no-package-lock
+          npm run build
+
+      - name: Format, vet, race tests, and build
         run: ./scripts/check.sh

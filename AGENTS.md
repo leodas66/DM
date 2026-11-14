@@ -1,14 +1,14 @@
 # AGENTS.md
 
 ## What this repo is
-A download manager daemon in Go, built phase by phase from `PLAN.md` (the
-spec — source of truth). Phases 0, R and 1–6 are committed: probe + segmented
-downloader, SQLite store + Manager (queue, concurrency and speed limits,
-resume, crash recovery), HTTP API + WebSocket events, MV3 browser extension,
-embedded Svelte UI, categories/scheduler/packaging. A Wails desktop wrapper
-(`internal/gui/wails`) was added after Phase 6 and is not in `PLAN.md`.
-`TESTING.md` holds the check matrix and what is still manual; `docs/DECISIONS.md`
-holds the open provisional calls.
+A lightweight download manager: a standalone Go daemon (engine, persistence,
+HTTP API + WebSocket events, scheduling, categories, packaging), a browser
+extension, and desktop clients. Phases 0, R and 1–6 of `PLAN.md` are committed;
+a Wails desktop wrapper (`internal/gui/wails`) was added after Phase 6 and is
+not in `PLAN.md`. The approved migration to a native GTK4 client and Native
+Messaging is documented in `docs/ARCHITECTURE.md`. `TESTING.md` holds the check
+matrix and what is still manual; `docs/DECISIONS.md` holds the open provisional
+calls.
 
 Read `PROCESS.md` before starting work. It defines how much you decide alone,
 when you must stop, and what counts as done. `docs/DECISIONS.md` records every
@@ -31,10 +31,12 @@ non-obvious call already made — check it before re-litigating a choice.
 
 ## Dependencies
 - Never add one without asking. Stdlib first.
-- Pre-approved: `modernc.org/sqlite` (Phase 2), Svelte + Vite in `ui/`,
-  esbuild in `extension/`.
-- Already in the tree: Wails v2 for the desktop wrapper (D018), added after
-  the planned phases. Ask before adding anything else.
+- Pre-approved: `modernc.org/sqlite`, Svelte + Vite in `ui/` and
+  `internal/gui/wails/frontend`, esbuild in `extension/`, and
+  `github.com/diamondburned/gotk4/pkg` v0.4.1 for the isolated GTK4 desktop
+  module.
+- Already in the tree: Wails v2 for the desktop wrapper (D023), added after the
+  planned phases. Ask before adding anything else.
 - `chi` and `cobra` are *not* needed — stdlib mux, `flag`, `log/slog`.
 - Module path is `github.com/vishwa/dm` (provisional, D001 in the decision
   log). Binary is `cmd/dm` → `dm`.
@@ -63,19 +65,32 @@ non-obvious call already made — check it before re-litigating a choice.
 - Never copy or translate code from GPL sources (aria2, Gopeed, XDM, old FDM)
   into this repo — that would relicense the project.
 - Do not decompile FDM 5.0+; observe behaviour only.
-- License is MIT (D013); do not add copyleft code or dependencies.
+- This project is MIT-licensed (D013); do not add copyleft code or
+  dependencies. Check each dependency's actual module license; the gotk4
+  generated `pkg` module is MPL-2.0, while its generator is AGPL-3.0 and must
+  not be imported.
 
-## Layout (PLAN §4)
-`cmd/dm`, `internal/{model,probe,download,manager,store,api,web}`, `ui/`
-(Svelte), `extension/` (TypeScript MV3), `internal/gui/wails` (desktop
-wrapper). The built UI is embedded via `go:embed` in `internal/web` and served
-at `/`. Both embedded trees — `internal/web/dist` and
-`internal/gui/wails/frontend/dist` — are gitignored except for a tracked
+## Layout
+`cmd/dm` and `cmd/dm-native-host` are Go executables. Core packages live in
+`internal/{model,probe,download,manager,store,app,api}`. `desktop/` is an
+isolated Go module for the GTK4 client (gotk4); it talks to the daemon over
+REST/WebSocket and must not be imported by the daemon module. `extension/` is a
+TypeScript MV3 extension using Native Messaging. The old `ui/`, Wails frontend
+and `internal/web` are migration targets and must not be deleted until the GTK
+client has feature parity and packaging/tests have moved.
+
+Migration status: only the design documents (`docs/ARCHITECTURE.md`,
+`docs/GTK4-DESIGN-SPEC.md`) exist so far — `desktop/`, `cmd/dm-native-host` and
+`internal/app` are not created yet.
+
+While they remain, both embedded trees (`internal/web/dist` and
+`internal/gui/wails/frontend/dist`) are gitignored except for a tracked
 `.gitkeep`, so `make check` works on a fresh clone without `npm install`.
 `internal/web` embeds `all:dist` and serves a "UI not built" page when
 `dist/index.html` is absent instead of panicking. Build the real bundles with
 `npm run build` in `ui/` or in the desktop frontend directory; each build
 script re-creates the `.gitkeep` that vite's `emptyOutDir` deletes.
+
 `scripts/mockserver` is a dev tool for manual checks (`-no-range`,
 `-flaky-every N`), see `TESTING.md`.
 
