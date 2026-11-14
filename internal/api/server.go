@@ -645,6 +645,17 @@ func generateToken() (string, error) {
 	return hex.EncodeToString(b), nil
 }
 
+// TokenFile returns the path of the bearer token file, creating the config
+// directory when it is missing. Local clients use it instead of duplicating
+// the lookup rules.
+func TokenFile() (string, error) {
+	base, err := defaultConfigBase()
+	if err != nil {
+		return "", err
+	}
+	return tokenPath(base)
+}
+
 // LoadOrCreateToken loads the bearer token from the config dir, generating
 // and storing one (mode 0600) if none exists.
 func LoadOrCreateToken() (string, error) {

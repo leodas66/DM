@@ -1,11 +1,15 @@
 GO ?= go
 
-.PHONY: all build vet test check check-desktop ci fmt hooks clean
+.PHONY: all build desktop vet test check check-desktop ci fmt hooks clean
 
 all: check
 
 build:
 	$(GO) build -o bin/dm ./cmd/dm
+
+# GTK4 client: separate module, needs cgo plus the GTK4 dev headers.
+desktop:
+	cd desktop && $(GO) build -o ../bin/dm-desktop .
 
 vet:
 	$(GO) vet ./...

@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=DM
+GenericName=Download Manager
+Comment=Fast segmented downloads managed by a small local daemon
+Exec=dm-desktop
+Icon=io.github.vishwa.DM
+Terminal=false
+Categories=Network;FileTransfer;
+Keywords=download;downloads;transfer;
+StartupNotify=true
+StartupWMClass=io.github.vishwa.DM

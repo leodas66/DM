@@ -40,3 +40,23 @@ jobs:
 
       - name: Format, vet, race tests, and build
         run: ./scripts/check.sh
+
+  desktop:
+    name: GTK4 client checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: desktop/go.mod
+          cache: true
+
+      - name: Install GTK4 development files
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-4-dev
+
+      - name: Format, vet, race tests, and build
+        run: ./scripts/check-desktop.sh

@@ -31,7 +31,7 @@ import (
 	"github.com/vishwa/dm/internal/web"
 )
 
-const version = "0.1.0-dev"
+const version = "0.2.0"
 
 func main() {
 	fs := flag.NewFlagSet("dm", flag.ExitOnError)
@@ -42,6 +42,7 @@ func main() {
 	timeout := fs.Duration("timeout", 0, "overall timeout (0 = none)")
 	showVersion := fs.Bool("version", false, "print version and exit")
 	serveMode := fs.Bool("serve", false, "run as daemon with API and web UI")
+	openUI := fs.Bool("open-ui", false, "open the legacy web UI in a browser when serving")
 	fs.Usage = func() {
 		fmt.Fprintf(os.Stderr, "usage: dm [flags] <url>\n\n")
 		fs.PrintDefaults()
@@ -54,7 +55,7 @@ func main() {
 	}
 
 	if *serveMode {
-		if err := runServe(); err != nil {
+		if err := runServe(*openUI); err != nil {
 			fmt.Fprintf(os.Stderr, "dm: %v\n", err)
 			os.Exit(1)
 		}
@@ -83,7 +84,7 @@ func defaultDownloadDir() string {
 // runServe starts the daemon: SQLite store, Manager, API server, and the
 // embedded web UI, all on a single 127.0.0.1 listener. It runs until
 // SIGINT/SIGTERM, then shuts down gracefully.
-func runServe() error {
+func runServe(openUI bool) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
@@ -138,11 +139,17 @@ func runServe() error {
 	}
 	defer runtime.Remove()
 
-	uiURL := fmt.Sprintf("http://%s/?token=%s", addr, token)
 	fmt.Printf("dm daemon listening on http://%s\n", addr)
 	fmt.Printf("Endpoint metadata: %s\n", endpointPath)
-	fmt.Printf("Bearer token: %s\n", token)
-	fmt.Printf("Opening UI at %s\n", uiURL)
+	if tokenPath, err := api.TokenFile(); err == nil {
+		fmt.Printf("Bearer token file: %s\n", tokenPath)
+	}
+	// The desktop client is the UI. The embedded web UI stays available behind
+	// a flag until parity is reached, and only then is the token put in a URL.
+	uiURL := fmt.Sprintf("http://%s/?token=%s", addr, token)
+	if openUI {
+		fmt.Printf("Opening legacy web UI at %s\n", uiURL)
+	}
 
 	srv := &http.Server{Handler: handler}
 	go func() {
@@ -151,8 +158,9 @@ func runServe() error {
 		}
 	}()
 
-	// Open the UI in a browser window so dm feels like a desktop app.
-	go openBrowser(uiURL)
+	if openUI {
+		go openBrowser(uiURL)
+	}
 
 	// Wait for shutdown signal.
 	<-ctx.Done()

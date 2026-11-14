@@ -139,3 +139,5 @@ Record any check skipped, with the reason and the phase it was moved to.
 | GTK4 | High-contrast and large-text appearance | Needs a separate GTK theme/settings session; no clipping was observed under the default font |
 | GTK4 | Light appearance | Only Breeze dark was available during the live check |
 | GTK4 | Confirm delete end-to-end | Destructive check on seeded files; the confirmation flow was rendered but not confirmed |
+| 6 | `makepkg -si` installs daemon, client, unit, desktop entry, icon | `makepkg`/`pacman` are unavailable here; `bash -n PKGBUILD`, `desktop-file-validate`, and the source tag were checked instead |
+| 6 | `dm --serve` without `--open-ui` opens no browser and prints no token | needs a fresh terminal run after installing the package |
