@@ -99,6 +99,7 @@ historical record; the GTK4 client is covered in its own section.
 | Check | Expected | Result | Date |
 |---|---|---|---|
 | `makepkg` build | produces `dm-0.2.0-1-x86_64.pkg.tar.zst` with all three binaries, the unit, entry, icon, Firefox manifest and license | pass — package built from the published `v0.2.0` tag; `bsdtar -tf` lists every expected path | 2026-11-15 |
+| `makepkg` build, 0.2.1 | same contents from tag `v0.2.1` | pass — `dm-0.2.1-1-x86_64.pkg.tar.zst` built warm; `bsdtar -tf` lists the three binaries, unit, entry, icon, Firefox manifest and LICENSE | 2026-11-14 |
 | Client build duration | first GTK4 build completes instead of hanging | pass — 510 s for `dm-desktop` on 8 cores with a cold cache; 12 s for the whole package once warm, so a silent pause is compilation | 2026-11-15 |
 | `makepkg -si` install | installs, systemd user unit starts | not run — needs root/pacman transaction in this environment; the build half is verified above | — |
 | Login on a fresh user | daemon running, token created 0600 | not run — needs a fresh user session | — |
@@ -116,6 +117,7 @@ existing 0600 token. Screenshots were taken of each state.
 | Launch with daemon running | window opens, all downloads listed | pass — 7 seeded downloads with type icons, state icons, and counts | 2026-11-14 |
 | Endpoint discovery | client finds the ephemeral port without configuration | pass — daemon printed the endpoint; client connected on first try | 2026-11-14 |
 | Live WebSocket updates | progress, summary, and counts update without reload | pass — a running row advanced 23% → 57% and the header summary changed with it | 2026-11-14 |
+| Row progress after pause and resume | a resumed row keeps advancing without waiting for another status change | pass — tagged check build against a throttled range server: the row tracked 2% → 69% after resume; before the fix it froze at 4% until the next pause | 2026-11-14 |
 | Filters and counts | each of All/Active/Queued/Paused/Completed/Failed shows only matching rows | pass — verified per filter; All includes the canceled row, so it exceeds the sum of the other counts | 2026-11-14 |
 | Add dialog | URL, folder, optional name; submit adds a row | pass — submitted from the dialog, new row appeared in the list | 2026-11-14 |
 | Delete confirmation | modal names the file and destination; Cancel is default | pass — rendered for a failed row; Escape closes it | 2026-11-14 |
