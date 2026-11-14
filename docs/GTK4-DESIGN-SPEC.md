@@ -1,7 +1,7 @@
 # GTK4 Desktop Design Specification
 
 Status: approved design baseline for the GTK4 client
-Scope: `desktop/` GTK4 application only. This document does not define the daemon, CLI, browser extension, or the transitional Svelte/Wails interfaces.
+Scope: `desktop/` GTK4 application only. This document does not define the daemon, CLI, browser extension, or transitional Svelte/Wails interfaces.
 
 ## 1. Product and platform contract
 
@@ -14,15 +14,38 @@ DM is a lightweight download manager. The desktop application is a native GTK4 c
 - Do not add Libadwaita or another UI toolkit as an implementation dependency without author approval. Prefer standard GTK4 widgets and platform behavior.
 - The design must work on KDE Plasma as well as GNOME. Do not assume GNOME Shell, GNOME-only services, or a Libadwaita runtime is present.
 
-## 2. Design direction
+## 2. Design direction: native GTK
 
-The interface is native, calm, practical, and information-led. The download list is the primary surface; controls should be easy to discover without turning every row into a toolbar.
+The chosen visual direction is **native**: DM should look and behave like a well-integrated GTK desktop application, not like a branded cross-platform web app.
 
-Use the active GTK theme and system color-scheme preference. Support light and dark appearances without maintaining a separate hard-coded palette. Do not force a specific desktop theme or accent color.
+- Prefer standard GTK4 widgets, layout containers, dialogs, menus, list views, focus behavior, and accessibility semantics.
+- Let the user's active GTK theme, system light/dark preference, system fonts, text scaling, and accessibility settings determine appearance.
+- Do not ship a bespoke palette, custom accent color, custom typography system, or app-wide CSS skin. Do not force a theme or override the user's desktop preference.
+- Use GTK's built-in visual states and spacing. Add narrowly scoped CSS only to address a demonstrated GTK limitation or a small product-specific need that cannot be expressed with standard widgets; document why it is needed.
+- Avoid copying GNOME/Libadwaita patterns where they require Libadwaita APIs or impose GNOME-specific behavior. GNOME HIG is a useful design reference, not a mandate to depend on GNOME services.
+- Native means using GTK's own platform integration; it does not mean attempting to imitate Qt widgets or making GTK render through a Qt style engine.
 
-Use GTK's system typography and text styles. Respect user font scaling; avoid fixed pixel font sizes, all-caps labels, and unnecessary font variants.
+### 2.1 KDE Plasma is a first-class host
 
-Use native widget spacing, alignment, focus, selection, and state styling as the baseline. Custom CSS is exceptional and must solve a demonstrated GTK limitation rather than restyle the entire application.
+The primary development environment includes Arch Linux with KDE Plasma on Wayland. GTK4 remains the chosen toolkit; KDE is the host desktop, not a reason to switch the application to Qt.
+
+- On KDE, use the GTK theme configured by the user (for example, Breeze GTK when selected). Do not hard-code Breeze or assume the Qt color scheme automatically controls GTK.
+- Respect GTK settings and desktop integration provided by the user's setup, including tools such as `kde-gtk-config` where installed. Do not install, configure, or mutate desktop theme settings from DM.
+- Use XDG Desktop Portal interfaces for desktop-mediated operations where appropriate, especially opening files/folders and choosing locations. Do not assume GNOME's portal backend; test with the portal backend available on Plasma.
+- Prefer GTK's native file chooser/dialog APIs unless a portal-backed chooser is needed for sandboxing or desktop integration. Do not shell out to Dolphin or another file manager to implement ordinary chooser behavior.
+- Verify that dialogs, file choosers, notifications (if added), clipboard access, and window behavior work on KDE Wayland without requiring GNOME Shell or GNOME services.
+- Do not add KDE/Qt libraries to the Go desktop client merely to make GTK look more like a Qt application.
+
+### 2.2 Native appearance and customization boundaries
+
+The application should inherit the host's visual language instead of defining its own.
+
+- No app-specific light/dark palettes; no manual background/foreground colors for ordinary surfaces.
+- No global CSS resets, custom widget replacements, decorative borders, shadows, gradients, blur, glow, or forced corner radii.
+- Use symbolic GTK icons and standard icon naming where available. Avoid bundling a private icon theme for ordinary actions.
+- Use standard GTK typography and allow system font scaling. Use tabular figures for dense numeric values only where supported by the selected system font.
+- If a GTK theme renders a control poorly, first verify the issue across at least one other GTK theme and both light/dark variants before adding a targeted workaround.
+- Product identity may appear in the application icon, name, and About dialog; it must not override the host's widget styling.
 
 ## 3. Main window structure
 
@@ -110,6 +133,8 @@ The initial preferences scope follows existing daemon settings:
 
 Do not invent settings that the daemon API does not support. Explain settings that affect future downloads separately from settings that affect active transfers.
 
+Do not add theme, accent-color, or font selectors to DM. Appearance is controlled by the host desktop and GTK configuration.
+
 ## 8. Destructive and lifecycle interactions
 
 Pause, Resume, and Cancel are distinct actions and must map to the corresponding daemon operations. Cancel must not be presented as Remove.
@@ -141,7 +166,7 @@ The UI Skills router is the selection layer for this UI phase. Use the smallest 
 
 Apply the useful principles from `baseline-ui` with GTK-native equivalents:
 - Use existing GTK widgets and accessible behavior instead of introducing React, Tailwind, Base UI, Radix, or hand-built web primitives.
-- Use system theme/style tokens instead of hard-coded colors.
+- Use the user's GTK theme and system appearance instead of hard-coded colors or app-owned design tokens.
 - Keep one clear primary action per view and keep secondary actions visually quiet.
 - Give empty states one clear next action.
 - Show validation errors beside the relevant field or action.
@@ -149,13 +174,14 @@ Apply the useful principles from `baseline-ui` with GTK-native equivalents:
 - Avoid unnecessary animation, gradients, blur, glow, and excessive accent colors.
 - Use tabular figures for dense numeric information where supported.
 
-The skill's Tailwind classes, React animation libraries, ARIA-specific instructions, and browser safe-area rules do not apply literally to this GTK4 application. Use GTK accessibility properties, native focus handling, GTK style classes, and platform conventions instead.
+The skill's Tailwind classes, React animation libraries, ARIA-specific instructions, and browser safe-area rules do not apply literally to this GTK4 application. Use GTK accessibility properties, native focus handling, GTK style classes, and platform conventions instead. Any skill guidance that conflicts with this native GTK direction or the platform contract above is out of scope.
 
 ## 12. Implementation review checklist
 
 Before calling the GTK UI phase complete, verify:
 
 - The window and download list remain usable at 1024×600 and at narrower widths.
+- The app follows the active GTK theme without imposing its own palette, accent, or typography.
 - Light, dark, and high-contrast system appearances work without hard-coded foreground/background colors.
 - Large text does not clip filenames, controls, status, or dialogs.
 - Keyboard-only use covers navigation, adding, pausing, resuming, canceling, and removing.
@@ -164,6 +190,9 @@ Before calling the GTK UI phase complete, verify:
 - Empty, loading, daemon-disconnected, failed, paused, and completed states are represented.
 - Destructive file deletion is distinguishable from removing a history entry.
 - Closing the client leaves daemon downloads running.
+- On KDE Plasma (Wayland), test with the user's configured GTK theme (including Breeze GTK when available), light/dark preference, file chooser/portal behavior, keyboard focus, and window interactions.
+- On GNOME, verify the app remains usable without making Libadwaita a dependency.
+- The client does not require GNOME Shell, GNOME-only services, Qt libraries, or a custom theme package.
 - GTK4 remains isolated in `desktop/`; daemon packages remain independent of GTK/cgo.
 
 ## 13. Governing references
@@ -182,5 +211,6 @@ Before calling the GTK UI phase complete, verify:
 - Progress bars: https://developer.gnome.org/hig/patterns/feedback/progress-bars.html
 - Dialogs: https://developer.gnome.org/hig/patterns/feedback/dialogs.html
 - GTK accessibility: https://gnome.pages.gitlab.gnome.org/gtk/gtk4/section-accessibility.html
+- XDG Desktop Portal: https://flatpak.github.io/xdg-desktop-portal/
 
 This specification defines the design baseline. It does not claim that a GTK screen has been implemented or visually audited.
