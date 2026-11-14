@@ -12,7 +12,7 @@ import (
 	"github.com/vishwa/dm/desktop/internal/ui"
 )
 
-const version = "0.1.0-dev"
+const version = "0.2.0"
 
 func main() {
 	os.Exit(ui.Run(version, dmapi.Connect))
