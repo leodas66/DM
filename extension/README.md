@@ -84,7 +84,9 @@ re-run the command after moving it). A packaged install puts the host in
 1. Build the extension: `cd extension && npm run build`.
 2. Open `about:debugging#/runtime/this-firefox`.
 3. Click **Load Temporary Add-on…** and select
-   `extension/dist/firefox/manifest.json`.
+   `extension/dist/firefox/manifest.json`. Do not pick the `dist/chrome`
+   manifest: it declares a service worker, which Firefox rejects with
+   `background.service_worker is currently disabled`.
 4. Install the host manifest as above.
 
 > Temporary add-ons are cleared when Firefox restarts. Firefox identifies this
@@ -107,6 +109,7 @@ re-run the command after moving it). A packaged install puts the host in
 
 | Symptom | Cause | Fix |
 |---|---|---|
+| Firefox: `background.service_worker is currently disabled. Add background.scripts.` | `dist/chrome/manifest.json` was selected; only the Firefox target uses event pages | Select `extension/dist/firefox/manifest.json` |
 | Tooltip says the native host is not installed | No manifest in the browser's NativeMessagingHosts directory | Install the manifest for your browser |
 | Tooltip says the daemon is not running | `$XDG_RUNTIME_DIR/dm/endpoint` is missing or stale | `systemctl --user start dm` |
 | Tooltip says the token is missing | The daemon has never run | Start the daemon once; it writes `~/.config/dm/token` |
