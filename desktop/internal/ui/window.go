@@ -54,6 +54,7 @@ type window struct {
 	defaultDir           string
 	settings             dmapi.Settings
 	sortMode             sortMode
+	sortDrop             *gtk.DropDown
 	searchEntry          *gtk.Entry
 	pauseAllButton       *gtk.Button
 	resumeAllButton      *gtk.Button
@@ -622,6 +623,7 @@ func (w *window) buildStack() *gtk.Stack {
 		}
 		r.setDownload(d, w.store.rate(id))
 		r.setColumns(w.showSizeColumn, w.showSpeedColumn, w.showETAColumn)
+		r.setSelected(w.selectedID == id)
 		w.visibleRows[id] = r
 	})
 	factory.ConnectUnbind(func(obj *coreglib.Object) {
@@ -961,6 +963,18 @@ func (w *window) flushRows() {
 
 func (w *window) rebuild() {
 	ids := w.visibleIDs()
+	if w.selectedID != "" {
+		visible := false
+		for _, id := range ids {
+			if id == w.selectedID {
+				visible = true
+				break
+			}
+		}
+		if !visible {
+			w.hideDetails()
+		}
+	}
 	w.model.Splice(0, w.model.NItems(), ids)
 
 	w.updateCounts()
@@ -1118,7 +1132,9 @@ func (w *window) syncSelection() {
 // sidebarBreakpoint is the width below which the full sidebar collapses
 // to an icon rail. All navigation destinations remain reachable.
 const sidebarBreakpoint = 900
-const inspectorBreakpoint = 1180
+// Keep the full inspector beside the list only when the table can retain its
+// comfortable minimum width. At ordinary laptop widths it becomes a sheet.
+const inspectorBreakpoint = 1440
 
 // adaptSidebar responds to the allocated window width. It is called on initial
 // presentation and from a small main-loop poll because default-width is only
@@ -1135,8 +1151,8 @@ func (w *window) adaptSidebar() {
 	rail := width < sidebarBreakpoint
 	wide := width >= inspectorBreakpoint
 	showSize := width >= 900
-	showSpeed := width >= 1024
-	showETA := width >= 1180
+	showSpeed := width >= 1100 || (width >= 760 && width < 900)
+	showETA := width >= 1100
 	if !w.columnsSet || showSize != w.showSizeColumn || showSpeed != w.showSpeedColumn || showETA != w.showETAColumn {
 		w.showSizeColumn = showSize
 		w.showSpeedColumn = showSpeed
