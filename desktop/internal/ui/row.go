@@ -52,17 +52,16 @@ type row struct {
 func newRow(w *window) *row {
 	r := &row{w: w}
 
-	r.root = gtk.NewBox(gtk.OrientationHorizontal, 8)
+	r.root = gtk.NewBox(gtk.OrientationHorizontal, 14)
 	r.root.AddCSSClass("dm-download-row")
 	r.root.SetHExpand(true)
-	r.root.SetMarginTop(8)
-	r.root.SetMarginBottom(8)
+	r.root.SetFocusable(true)
 	r.root.SetMarginStart(12)
 	r.root.SetMarginEnd(12)
 
 	// Name: file type icon plus filename and source context.
 	r.fileCell = gtk.NewBox(gtk.OrientationHorizontal, 10)
-	r.fileCell.SetSizeRequest(170, -1)
+	r.fileCell.SetSizeRequest(220, -1)
 	r.fileCell.SetHExpand(true)
 	r.fileCell.SetVAlign(gtk.AlignCenter)
 	r.fileIcon = gtk.NewImage()
@@ -85,7 +84,7 @@ func newRow(w *window) *row {
 
 	// Progress: status/percentage and downloaded bytes above the progress bar.
 	r.progressCell = gtk.NewBox(gtk.OrientationVertical, 5)
-	r.progressCell.SetSizeRequest(125, -1)
+	r.progressCell.SetSizeRequest(150, -1)
 	r.progressCell.SetVAlign(gtk.AlignCenter)
 
 	r.progressTop = gtk.NewBox(gtk.OrientationHorizontal, 5)
@@ -115,21 +114,21 @@ func newRow(w *window) *row {
 	r.root.Append(r.progressCell)
 
 	// Numeric columns use tabular alignment and never infer missing values.
-	r.sizeLabel = tableValueLabel(58, gtk.AlignEnd)
+	r.sizeLabel = tableValueLabel(92, gtk.AlignEnd)
 	r.sizeLabel.AddCSSClass("dm-table-value")
 	r.root.Append(r.sizeLabel)
 
-	r.speedLabel = tableValueLabel(66, gtk.AlignEnd)
+	r.speedLabel = tableValueLabel(100, gtk.AlignEnd)
 	r.speedLabel.AddCSSClass("dm-table-value")
 	r.root.Append(r.speedLabel)
 
-	r.etaLabel = tableValueLabel(55, gtk.AlignEnd)
+	r.etaLabel = tableValueLabel(84, gtk.AlignEnd)
 	r.etaLabel.AddCSSClass("dm-table-value")
 	r.root.Append(r.etaLabel)
 
 	// Actions: one state-aware primary action and a quieter overflow menu.
 	r.actionCell = gtk.NewBox(gtk.OrientationHorizontal, 2)
-	r.actionCell.SetSizeRequest(62, -1)
+	r.actionCell.SetSizeRequest(84, -1)
 	r.actionCell.SetHAlign(gtk.AlignEnd)
 	r.actionCell.SetVAlign(gtk.AlignCenter)
 	r.pause = newIconButton("media-playback-pause-symbolic", "Pause")
@@ -164,6 +163,15 @@ func newRow(w *window) *row {
 	})
 	r.popover.SetChild(menuBox)
 	r.menu.SetPopover(r.popover)
+
+	// Clicking anywhere on the row selects it and opens its inspector.
+	click := gtk.NewGestureClick()
+	click.ConnectReleased(func(int, float64, float64) {
+		if r.id != "" {
+			r.w.showDetails(r.id)
+		}
+	})
+	r.root.AddController(click)
 
 	r.pause.ConnectClicked(func() {
 		if r.id == "" {
@@ -228,6 +236,14 @@ func tableHeaderLabel(text string, width int, expand bool) *gtk.Label {
 }
 
 // setColumns keeps each virtualized row in sync with the responsive header.
+func (r *row) setSelected(selected bool) {
+	if selected {
+		r.root.AddCSSClass("selected")
+	} else {
+		r.root.RemoveCSSClass("selected")
+	}
+}
+
 func (r *row) setColumns(showSize, showSpeed, showETA bool) {
 	r.sizeLabel.SetVisible(showSize)
 	r.speedLabel.SetVisible(showSpeed)
@@ -250,13 +266,7 @@ func newMenuItem(text string) *gtk.Button {
 // from the daemon snapshot/rate sampler; unknown values are rendered as dashes.
 func (r *row) setDownload(d model.Download, bytesPerSecond float64) {
 	r.id = d.ID
-	if r.w.prefs.Density == densityCompact {
-		r.root.SetMarginTop(3)
-		r.root.SetMarginBottom(3)
-	} else {
-		r.root.SetMarginTop(8)
-		r.root.SetMarginBottom(8)
-	}
+	r.setSelected(r.w.selectedID == d.ID)
 
 	text := describe(d, bytesPerSecond)
 	downloaded := dmapi.Downloaded(d)
