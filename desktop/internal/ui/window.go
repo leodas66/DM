@@ -12,6 +12,7 @@ import (
 	"time"
 
 	coreglib "github.com/diamondburned/gotk4/pkg/core/glib"
+	"github.com/diamondburned/gotk4/pkg/gdk/v4"
 	"github.com/diamondburned/gotk4/pkg/gio/v2"
 	"github.com/diamondburned/gotk4/pkg/glib/v2"
 	"github.com/diamondburned/gotk4/pkg/gtk/v4"
@@ -258,19 +259,22 @@ func (w *window) build() {
 	w.win.AddAction(catsAction)
 
 	controller := gtk.NewShortcutController()
+	// Build keyval triggers directly. ShortcutTriggerParseString returns nil
+	// for invalid or unsupported accelerator strings; passing that nil into
+	// NewShortcut panics inside gotk4's object wrapper.
 	controller.AddShortcut(gtk.NewShortcut(
-		gtk.NewShortcutTriggerParseString("<Control>n"),
+		gtk.NewKeyvalTrigger(gdk.UnicodeToKeyval('n'), gdk.ControlMask),
 		gtk.NewNamedAction("win.add"),
 	))
 	controller.AddShortcut(gtk.NewShortcut(
-		gtk.NewShortcutTriggerParseString("<Control>comma"),
+		gtk.NewKeyvalTrigger(gdk.UnicodeToKeyval(','), gdk.ControlMask),
 		gtk.NewNamedAction("win.preferences"),
 	))
 	searchAction := gio.NewSimpleAction("search", nil)
 	searchAction.ConnectActivate(func(*glib.Variant) { w.searchEntry.GrabFocus() })
 	w.win.AddAction(searchAction)
 	controller.AddShortcut(gtk.NewShortcut(
-		gtk.NewShortcutTriggerParseString("/"),
+		gtk.NewKeyvalTrigger(gdk.UnicodeToKeyval('/'), gdk.NoModifierMask),
 		gtk.NewNamedAction("win.search"),
 	))
 	w.win.AddController(controller)
