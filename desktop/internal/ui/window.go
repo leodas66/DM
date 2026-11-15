@@ -36,6 +36,9 @@ type window struct {
 	categoryHeader *gtk.Box
 	networkCard *gtk.Box
 	body *gtk.Box
+	layoutSet bool
+	isRail bool
+	layoutWide bool
 	connectFn func() (*dmapi.Client, error)
 	win       *gtk.ApplicationWindow
 
@@ -453,6 +456,7 @@ func (w *window) buildSidebar() *gtk.Box {
 func addSidebarRow(list *gtk.ListBox, icon, text string) (*gtk.ListBoxRow, *gtk.Label, *gtk.Label) {
 	row := gtk.NewListBoxRow()
 	row.AddCSSClass("dm-nav-row")
+	row.SetTooltipText(text)
 	row.SetActivatable(true)
 
 	content := gtk.NewBox(gtk.OrientationHorizontal, 8)
@@ -1017,7 +1021,10 @@ func (w *window) updateCategories(categories []model.Category) {
 	if w.filter.kind == filterCategory && !w.categoryExists(w.filter.categoryID) {
 		w.setFilterSilently(filter{kind: filterAll, label: "All Downloads"})
 	}
-	w.categoryBox.SetVisible(len(categories) > 0)
+	w.categoryBox.SetVisible(len(categories) > 0 && !w.isRail)
+	if w.categoryHeader != nil {
+		w.categoryHeader.SetVisible(len(categories) > 0 && !w.isRail)
+	}
 	w.syncSelection()
 }
 
@@ -1076,6 +1083,7 @@ func (w *window) syncSelection() {
 // sidebarBreakpoint is the width below which the full sidebar collapses
 // to an icon rail. All navigation destinations remain reachable.
 const sidebarBreakpoint = 900
+const inspectorBreakpoint = 1180
 
 // adaptSidebar responds to the allocated window width. It is called on initial
 // presentation and from a small main-loop poll because default-width is only
@@ -1090,56 +1098,64 @@ func (w *window) adaptSidebar() {
 	}
 
 	rail := width < sidebarBreakpoint
-	if w.sidebar != nil {
-		if rail {
-			w.sidebar.SetSizeRequest(64, -1)
-			w.sidebar.AddCSSClass("dm-sidebar-rail")
-		} else {
-			w.sidebar.SetSizeRequest(232, -1)
-			w.sidebar.RemoveCSSClass("dm-sidebar-rail")
+	wide := width >= inspectorBreakpoint
+	if !w.layoutSet || rail != w.isRail {
+		if w.sidebar != nil {
+			if rail {
+				w.sidebar.SetSizeRequest(64, -1)
+				w.sidebar.AddCSSClass("dm-sidebar-rail")
+			} else {
+				w.sidebar.SetSizeRequest(232, -1)
+				w.sidebar.RemoveCSSClass("dm-sidebar-rail")
+			}
 		}
-	}
-	if w.brandText != nil {
-		w.brandText.SetVisible(!rail)
-	}
-	if w.navHeading != nil {
-		w.navHeading.SetVisible(!rail)
-	}
-	for _, fr := range w.filterRows {
-		fr.name.SetVisible(!rail)
-		fr.count.SetVisible(!rail)
-	}
-	for _, cr := range w.categoryRows {
-		cr.name.SetVisible(!rail)
-		cr.count.SetVisible(!rail)
-	}
-	if w.categoryHeader != nil {
-		w.categoryHeader.SetVisible(!rail && len(w.categoryRows) > 0)
-	}
-	if w.categoryBox != nil {
-		w.categoryBox.SetVisible(!rail && len(w.categoryRows) > 0)
-	}
-	if w.networkCard != nil {
-		w.networkCard.SetVisible(!rail)
+		if w.brandText != nil {
+			w.brandText.SetVisible(!rail)
+		}
+		if w.navHeading != nil {
+			w.navHeading.SetVisible(!rail)
+		}
+		for _, fr := range w.filterRows {
+			fr.name.SetVisible(!rail)
+			fr.count.SetVisible(!rail)
+		}
+		for _, cr := range w.categoryRows {
+			cr.name.SetVisible(!rail)
+			cr.count.SetVisible(!rail)
+		}
+		if w.categoryHeader != nil {
+			w.categoryHeader.SetVisible(!rail && len(w.categoryRows) > 0)
+		}
+		if w.categoryBox != nil {
+			w.categoryBox.SetVisible(!rail && len(w.categoryRows) > 0)
+		}
+		if w.networkCard != nil {
+			w.networkCard.SetVisible(!rail)
+		}
+		w.isRail = rail
 	}
 
-	if w.body != nil && w.inspectorRevealer != nil {
-		if width >= 1180 {
-			w.body.SetOrientation(gtk.OrientationHorizontal)
-			w.inspectorRevealer.SetTransitionType(gtk.RevealerTransitionTypeSlideLeft)
-			w.inspectorRevealer.SetSizeRequest(336, -1)
-			w.inspectorRevealer.SetRevealChild(true)
-			w.inspectorPanel.RemoveCSSClass("dm-inspector-sheet")
-			w.inspectorPanel.AddCSSClass("dm-inspector-wide")
-		} else {
-			w.body.SetOrientation(gtk.OrientationVertical)
-			w.inspectorRevealer.SetTransitionType(gtk.RevealerTransitionTypeSlideUp)
-			w.inspectorRevealer.SetSizeRequest(-1, 360)
-			w.inspectorRevealer.SetRevealChild(w.selectedID != "")
-			w.inspectorPanel.RemoveCSSClass("dm-inspector-wide")
-			w.inspectorPanel.AddCSSClass("dm-inspector-sheet")
+	if !w.layoutSet || wide != w.layoutWide {
+		if w.body != nil && w.inspectorRevealer != nil {
+			if wide {
+				w.body.SetOrientation(gtk.OrientationHorizontal)
+				w.inspectorRevealer.SetTransitionType(gtk.RevealerTransitionTypeSlideLeft)
+				w.inspectorRevealer.SetSizeRequest(336, -1)
+				w.inspectorRevealer.SetRevealChild(true)
+				w.inspectorPanel.RemoveCSSClass("dm-inspector-sheet")
+				w.inspectorPanel.AddCSSClass("dm-inspector-wide")
+			} else {
+				w.body.SetOrientation(gtk.OrientationVertical)
+				w.inspectorRevealer.SetTransitionType(gtk.RevealerTransitionTypeSlideUp)
+				w.inspectorRevealer.SetSizeRequest(-1, 360)
+				w.inspectorRevealer.SetRevealChild(w.selectedID != "")
+				w.inspectorPanel.RemoveCSSClass("dm-inspector-wide")
+				w.inspectorPanel.AddCSSClass("dm-inspector-sheet")
+			}
 		}
+		w.layoutWide = wide
 	}
+	w.layoutSet = true
 }
 
 func (w *window) setSidebarVisible(visible bool) {
