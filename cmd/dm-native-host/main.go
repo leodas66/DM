@@ -24,7 +24,7 @@ import (
 	"github.com/vishwa/dm/internal/nativehost"
 )
 
-const version = "0.2.1"
+var version = "0.2.1"
 
 // hostName is the Native Messaging host name the extension asks for. Browser
 // manifests must use exactly this value.

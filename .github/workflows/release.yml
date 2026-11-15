@@ -1,0 +1,106 @@
+name: release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    if: github.ref == 'refs/heads/main'
+    name: Build Linux ${{ matrix.arch }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-26.04
+          - arch: aarch64
+            runner: ubuntu-26.04-arm
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+          cache-dependency-path: |
+            go.sum
+            desktop/go.sum
+      - name: Install GTK4 build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-4-dev libgirepository1.0-dev
+      - name: Build and stage binaries
+        run: |
+          set -euo pipefail
+          version="$(cat VERSION)"
+          stage="$RUNNER_TEMP/dm-release"
+          mkdir -p "$stage/usr/bin"
+
+          go build -trimpath -ldflags "-s -w -X main.version=$version" -o "$stage/usr/bin/dm" ./cmd/dm
+          go build -trimpath -ldflags "-s -w -X main.version=$version" -o "$stage/usr/bin/dm-native-host" ./cmd/dm-native-host
+          (cd desktop && go build -trimpath -ldflags "-s -w -X main.version=$version" -o "$stage/usr/bin/dm-desktop" .)
+
+          install -Dm644 dm.service "$stage/usr/lib/systemd/user/dm.service"
+          install -Dm644 packaging/io.github.vishwa.DM.desktop "$stage/usr/share/applications/io.github.vishwa.DM.desktop"
+          install -Dm644 packaging/io.github.vishwa.DM.svg "$stage/usr/share/icons/hicolor/scalable/apps/io.github.vishwa.DM.svg"
+          install -Dm644 packaging/io.github.vishwa.dm.firefox.json "$stage/usr/lib/mozilla/native-messaging-hosts/io.github.vishwa.dm.json"
+          install -Dm644 LICENSE "$stage/usr/share/licenses/dm/LICENSE"
+
+          cat > "$stage/BUILD_INFO" <<EOF
+          VERSION=$version
+          BUILD_NUMBER=$GITHUB_RUN_NUMBER
+          SHORT_SHA=${GITHUB_SHA:0:7}
+          EOF
+
+          tar -czf "dm-linux-${{ matrix.arch }}.tar.gz" -C "$stage" usr BUILD_INFO
+          sha256sum "dm-linux-${{ matrix.arch }}.tar.gz"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dm-linux-${{ matrix.arch }}
+          path: dm-linux-${{ matrix.arch }}.tar.gz
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    if: github.ref == 'refs/heads/main'
+    name: Publish rolling GitHub prerelease
+    needs: build
+    runs-on: ubuntu-26.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: dm-linux-*
+          path: release-assets
+          merge-multiple: true
+      - name: Generate checksums and refresh continuous release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          cd release-assets
+          test -s dm-linux-x86_64.tar.gz
+          test -s dm-linux-aarch64.tar.gz
+          sha256sum dm-linux-*.tar.gz > SHA256SUMS
+
+          gh release delete continuous --yes || true
+          git tag -f continuous "$GITHUB_SHA"
+          git push origin +refs/tags/continuous:refs/tags/continuous
+
+          printf 'Automated build from commit %s.\n\n' "$GITHUB_SHA" > release-notes.md
+          printf 'This rolling prerelease is refreshed by successful pushes to main.\n' >> release-notes.md
+          printf '\nAssets include dm, dm-native-host and dm-desktop for Linux x86-64 and ARM64.\n' >> release-notes.md
+
+          gh release create continuous dm-linux-x86_64.tar.gz dm-linux-aarch64.tar.gz SHA256SUMS \
+            --target "$GITHUB_SHA" \
+            --title "Continuous build $(cat ../VERSION) (${GITHUB_SHA:0:7})" \
+            --notes-file release-notes.md \
+            --prerelease

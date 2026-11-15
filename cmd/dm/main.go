@@ -29,7 +29,7 @@ import (
 	"github.com/vishwa/dm/internal/store"
 )
 
-const version = "0.2.1"
+var version = "0.2.1"
 
 func main() {
 	fs := flag.NewFlagSet("dm", flag.ExitOnError)

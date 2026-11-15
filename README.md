@@ -19,10 +19,12 @@ cd DM
 makepkg -si
 ```
 
-The build compiles the GTK4 client, and that step takes several minutes the
-first time (about 8 minutes on 8 cores). `go build` prints nothing while it
-works, so a long pause after `building dm-desktop` is expected, not a hang.
-`makepkg` then asks for confirmation and your sudo password to install.
+The PKGBUILD downloads the prebuilt daemon, Native Messaging host and GTK4
+desktop client from the latest `continuous` GitHub prerelease for your
+architecture. It verifies the bundle against the release's `SHA256SUMS` file
+and installs the binaries plus the systemd unit, desktop entry, icon and
+Firefox Native Messaging manifest. A local Go/GTK development toolchain is
+not needed to install the package.
 
 This installs:
 
@@ -55,6 +57,14 @@ its runtime endpoint file, so no address or port is configured by hand.
   `~/.config/dm/dm.db`.
 - The daemon listens on an ephemeral loopback port and advertises it in
   `$XDG_RUNTIME_DIR/dm/endpoint`.
+
+## Automated builds and releases
+
+Every push to `main` builds Linux x86-64 and ARM64 bundles and refreshes the
+rolling `continuous` prerelease at
+https://github.com/leodas66/DM/releases/tag/continuous. The Arch PKGBUILD
+tracks that channel and derives its package version from metadata embedded in
+the downloaded bundle.
 
 ## Build from source
 

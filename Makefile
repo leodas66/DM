@@ -1,16 +1,18 @@
 GO ?= go
+VERSION ?= $(shell cat VERSION)
+VERSION_LDFLAGS = -X main.version=$(VERSION)
 
 .PHONY: all build desktop vet test check check-desktop ci fmt hooks clean
 
 all: check
 
 build:
-	$(GO) build -o bin/dm ./cmd/dm
-	$(GO) build -o bin/dm-native-host ./cmd/dm-native-host
+	$(GO) build -trimpath -ldflags "$(VERSION_LDFLAGS)" -o bin/dm ./cmd/dm
+	$(GO) build -trimpath -ldflags "$(VERSION_LDFLAGS)" -o bin/dm-native-host ./cmd/dm-native-host
 
 # GTK4 client: separate module, needs cgo plus the GTK4 dev headers.
 desktop:
-	cd desktop && $(GO) build -o ../bin/dm-desktop .
+	cd desktop && $(GO) build -trimpath -ldflags "$(VERSION_LDFLAGS)" -o ../bin/dm-desktop .
 
 vet:
 	$(GO) vet ./...
