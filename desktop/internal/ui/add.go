@@ -29,8 +29,8 @@ type addDialog struct {
 	formErrorBox   *gtk.Box
 	formErrorLabel *gtk.Label
 
-	addButton  *gtk.Button
-	urlHint    *gtk.Label
+	addButton *gtk.Button
+	urlHint   *gtk.Label
 
 	sourceBox     *gtk.Box
 	sourceDetails *gtk.Label
