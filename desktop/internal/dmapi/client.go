@@ -128,9 +128,12 @@ type Settings struct {
 // AddRequest is a new download. Secrets (headers, cookies, referrer) are not
 // exposed by this client: the desktop UI never captures them.
 type AddRequest struct {
-	URL      string `json:"url"`
-	Filename string `json:"filename,omitempty"`
-	Dir      string `json:"dir,omitempty"`
+	URL      string            `json:"url"`
+	Filename string            `json:"filename,omitempty"`
+	Dir      string            `json:"dir,omitempty"`
+	Referrer string            `json:"referrer,omitempty"`
+	Headers  map[string]string `json:"headers,omitempty"`
+	Cookies  []model.Cookie    `json:"cookies,omitempty"`
 }
 
 // Downloaded returns the bytes written across all segments. Single-stream
