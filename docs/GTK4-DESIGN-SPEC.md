@@ -1,6 +1,6 @@
 # GTK4 Desktop Design Specification
 
-Status: approved design baseline for the GTK4 client
+Status: approved design baseline v2 — Full v3 workspace selected by the author (D040), superseding the native-theme-only baseline
 Scope: `desktop/` GTK4 application only. This document does not define the daemon, CLI, browser extension, or the removed web/Wails interfaces (D035).
 
 ## 1. Product and platform contract
@@ -14,91 +14,82 @@ DM is a lightweight download manager. The desktop application is a native GTK4 c
 - Do not add Libadwaita or another UI toolkit as an implementation dependency without author approval. Prefer standard GTK4 widgets and platform behavior.
 - The design must work on KDE Plasma as well as GNOME. Do not assume GNOME Shell, GNOME-only services, or a Libadwaita runtime is present.
 
-## 2. Design direction: native GTK
+## 2. Design direction: native GTK with the DM v3 visual system
 
-The chosen visual direction is **native**: DM should look and behave like a well-integrated GTK desktop application, not like a branded cross-platform web app.
+DM remains a native GTK4 application. The approved v3 direction changes the visual system and workspace composition, not the widget toolkit or daemon boundary.
 
-- Prefer standard GTK4 widgets, layout containers, dialogs, menus, list views, focus behavior, and accessibility semantics.
-- Let the user's active GTK theme, system light/dark preference, system fonts, text scaling, and accessibility settings determine appearance.
-- Do not ship a bespoke palette, custom accent color, custom typography system, or app-wide CSS skin. Do not force a theme or override the user's desktop preference.
-- Use GTK's built-in visual states and spacing. Add narrowly scoped CSS only to address a demonstrated GTK limitation or a small product-specific need that cannot be expressed with standard widgets; document why it is needed.
-- Avoid copying GNOME/Libadwaita patterns where they require Libadwaita APIs or impose GNOME-specific behavior. GNOME HIG is a useful design reference, not a mandate to depend on GNOME services.
-- Native means using GTK's own platform integration; it does not mean attempting to imitate Qt widgets or making GTK render through a Qt style engine.
+- Use standard GTK4 widgets, list models, menus, dialogs, focus behavior and accessibility semantics. Do not embed the HTML prototype or introduce a WebView, React, Electron, Libadwaita, Qt or another UI toolkit.
+- Translate the v3 reference into GTK-native widget composition. The target is the visual hierarchy, information density, palette, and responsive behavior—not a literal port of browser DOM or CSS.
+- DM owns its application palette: dark, light, dark high-contrast and light high-contrast variants. The user can choose Follow system, Dark or Light; Follow system is the default. The application palette does not modify global GTK or desktop settings.
+- Centralize all colors in desktop/internal/ui/palette-*.css and all shared widget/layout rules in desktop/internal/ui/style.css. Widget Go files must not contain raw color values. Palette variants must define the same named colors.
+- Use the system font stack; prefer Inter when installed, with Noto Sans, Cantarell and the system UI font as fallbacks. Do not bundle a font. Text scaling remains governed by GTK.
+- Comfortable and Compact row densities are application preferences, saved locally by the desktop client and never sent to the daemon.
+- Keep GTK's native focus, selection, hover, disabled and accessibility behavior. Styling changes appearance, never behavior.
 
 ### 2.1 KDE Plasma is a first-class host
 
-The primary development environment includes Arch Linux with KDE Plasma on Wayland. GTK4 remains the chosen toolkit; KDE is the host desktop, not a reason to switch the application to Qt.
+- GTK4 remains the toolkit on KDE Plasma and GNOME. Do not add KDE/Qt libraries or assume GNOME Shell, GNOME-only services or Libadwaita.
+- Preserve the host's windowing, font scaling, clipboard, file chooser and portal integration. The DM palette is an application-level skin, not a replacement desktop theme.
+- Use GTK and XDG Desktop Portal APIs for file/folder selection and opening. Do not shell out to Dolphin or another file manager.
+- Verify dialogs, clipboard, keyboard focus, file choosers and window behavior on KDE Wayland.
 
-- On KDE, use the GTK theme configured by the user (for example, Breeze GTK when selected). Do not hard-code Breeze or assume the Qt color scheme automatically controls GTK.
-- Respect GTK settings and desktop integration provided by the user's setup, including tools such as `kde-gtk-config` where installed. Do not install, configure, or mutate desktop theme settings from DM.
-- Use XDG Desktop Portal interfaces for desktop-mediated operations where appropriate, especially opening files/folders and choosing locations. Do not assume GNOME's portal backend; test with the portal backend available on Plasma.
-- Prefer GTK's native file chooser/dialog APIs unless a portal-backed chooser is needed for sandboxing or desktop integration. Do not shell out to Dolphin or another file manager to implement ordinary chooser behavior.
-- Verify that dialogs, file choosers, notifications (if added), clipboard access, and window behavior work on KDE Wayland without requiring GNOME Shell or GNOME services.
-- Do not add KDE/Qt libraries to the Go desktop client merely to make GTK look more like a Qt application.
+### 2.2 Token and appearance boundaries
 
-### 2.2 Native appearance and customization boundaries
+- All four palettes define the same semantic tokens: background, window, sidebar, surface, raised surface, hover, separators, text, muted text, subtle text, accent, accent foreground, accent hover, success, warning, danger, selection and progress track.
+- The dark palette follows the prototype's charcoal surfaces and warm amber accent. The light palette is a true light counterpart rather than an inverted dark palette.
+- High-contrast variants increase text, border and focus contrast; state must never be communicated by color alone.
+- The GTK theme may still provide platform behavior and fallback rendering, but it must not replace DM's authored semantic palette.
 
-The application should inherit the host's visual language instead of defining its own.
-
-- No app-specific light/dark palettes; no manual background/foreground colors for ordinary surfaces.
-- No global CSS resets, custom widget replacements, decorative borders, shadows, gradients, blur, glow, or forced corner radii.
-- Use symbolic GTK icons and standard icon naming where available. Avoid bundling a private icon theme for ordinary actions.
-- Use standard GTK typography and allow system font scaling. Use tabular figures for dense numeric values only where supported by the selected system font.
-- If a GTK theme renders a control poorly, first verify the issue across at least one other GTK theme and both light/dark variants before adding a targeted workaround.
-- Product identity may appear in the application icon, name, and About dialog; it must not override the host's widget styling.
 
 ## 3. Main window structure
 
-The primary window has three functional regions:
+The desktop workspace follows the approved DM v3 composition.
 
-1. A GTK header bar with the current view title, the primary **Add Download** action, and a small app menu for secondary actions such as Preferences and About.
-2. A navigation area for download filters and user categories.
-3. A main content area containing the download list for the selected filter or category.
+1. A compact GTK header bar with the view title, search, appearance toggle, Preferences and the primary New download action.
+2. A 232 px navigation sidebar with the DM brand/version, lifecycle filters, user categories and a network summary card.
+3. A main content area with a page title and metadata, a bulk-action/sort toolbar, and the virtualized download list.
+4. A download inspector at the right on wide windows. It is visible by default at widths of 1180 px and above; below that width it becomes an on-demand bottom sheet. It must not permanently steal list space on narrow windows.
 
-Keep the header bar sparse. The Add Download action is the primary action; secondary actions belong in the app menu or the relevant row menu. Preserve clear space in the header bar for window dragging.
+The sidebar exposes All, Active/Downloading, Queued, Paused, Completed and Failed. User categories appear as a separate group when available. Canceled items remain discoverable in All/history.
 
-The navigation area exposes the useful lifecycle filters: All, Active, Queued, Paused, Completed, and Failed. Canceled items remain discoverable in All/history. User categories appear as a separate group when categories are available. Do not add a navigation destination for every individual download.
+The header search matches filenames, source URLs and destination paths. The toolbar offers Pause all, Resume all, Clear completed and sorting by date added, name, file size or progress. Clear completed removes history records only and never deletes downloaded files.
 
-The main area uses a virtualized GTK list view for the dynamic download collection. Do not use a grid of oversized cards for ordinary downloads.
+The list remains virtualized with GTK's list view. It is a table-like information surface, not a grid of oversized cards. The initial target window size is 1280×820. At narrower widths the sidebar collapses to a rail, then secondary table columns are progressively hidden while status, progress and actions remain accessible.
 
-The header provides a labelled search entry that matches filenames, source URLs and destination paths. A compact toolbar offers Pause all, Resume all, Clear completed and sorting by date added, name, file size or progress. Clearing completed removes history records only; it never deletes the downloaded files.
+The inspector is persistent on wide windows and shows an empty prompt until a row is selected. On narrow windows, selecting a row opens it as a bottom sheet with a dismissible scrim. It reports daemon-backed values only: status, bytes, rate, ETA, source, destination and actual segment count.
 
-An on-demand details pane may appear beside the list when the user chooses **Show details** from a row menu. It is hidden by default, keeps the list as the primary surface and reports only daemon-backed values (status, bytes, rate, ETA, source, destination and actual segment count). It must not fabricate segment ownership or progress.
 
-The first layout target is a desktop window at 1024×600. As width decreases, collapse or replace the sidebar with a compact native navigation control; keep the download list usable and retain all actions. Avoid permanently visible multi-pane inspectors.
+## 4. Download table and row contract
 
-## 4. Download list and row contract
+Each row is a compact, scannable record with these columns at wide widths:
 
-Each download row presents the information needed to identify and monitor a file:
+- Name: file-type icon, filename and source host/context.
+- Progress: determinate bar and transferred bytes/percentage when known; an activity indicator for indeterminate work.
+- Size: total size, or an explicit unknown value.
+- Speed: current rate for active transfers.
+- Left: ETA only when it can be calculated from daemon-backed size and rate.
+- Actions: the primary state-appropriate action and a secondary menu.
 
-- Filename as the primary label.
-- Source host or URL as secondary context, shortened safely when necessary.
-- A progress indicator for active transfers.
-- Transferred bytes and total size when known.
-- Current status, transfer speed, and estimated time remaining when applicable.
-- Row actions appropriate to the current state.
-
-Keep the row visually regular and scannable. Use a compact two-line hierarchy rather than a collection of unrelated badges and buttons. Use symbolic GTK icons where an icon improves recognition.
+The table header labels are Name, Progress, Size, Speed, Left and Actions. Column widths respond to the window width; hiding a narrow column must not remove its value from the inspector or accessible row description.
 
 Actions are state-aware:
 - Active: Pause and Cancel.
 - Paused: Resume and Cancel.
 - Queued: Cancel.
-- Completed: history/removal actions; do not show transfer controls.
-- Failed: Retry when the API supports it, otherwise show the available recovery action.
+- Completed: history/removal actions and Open File; no transfer controls.
+- Failed: Retry when the API supports it, otherwise the available recovery action.
 - Canceled: history/removal actions.
 
-Do not show unavailable actions as active controls. Put less-frequent actions in a row menu rather than permanently displaying multiple icon buttons.
+Keep less-frequent actions in a row menu. Do not show unavailable actions as active controls. Rows are selectable; selection updates the inspector. Keyboard up/down moves the selection and keeps the selected row visible.
 
-### Progress and status
+### Progress and parallel connections
 
-For known file sizes, show a determinate progress bar with a readable percentage or byte count. Keep speed and ETA adjacent to the download they describe.
+For known sizes, show a determinate progress bar with readable progress. For unknown sizes, do not invent a percentage or ETA.
 
-For unknown-size or indeterminate work, do not invent a percentage or ETA. Use GTK activity indication and a concise status label instead.
+The selected-download inspector may show a segmented connection map and connection chips, but only from actual daemon segment records. Segment spans, transferred bytes and connection counts must be derived from model.Download.Segments; never simulate segment ownership, invent connection rates or fabricate progress. When segment detail is unavailable, say so plainly.
 
-Use text and, where useful, a symbolic icon in addition to color for every state. Status must remain understandable in high-contrast mode and for users who cannot distinguish colors.
+Use text and, where useful, a symbolic icon in addition to color for every state. Use tabular figures for byte counts, rates, percentages and ETA where the system font supports them.
 
-Use tabular figures for byte counts, rates, percentages, and ETA wherever the selected system font supports them. Format values consistently across rows.
 
 ## 5. Add Download flow
 
@@ -127,17 +118,24 @@ Do not put browser-captured cookies, authorization headers, or other secrets int
 
 ## 7. Preferences
 
-Preferences are a secondary surface, not part of the main download list. Group related controls and keep labels and inputs consistently aligned.
+Preferences contain two distinct groups.
 
-The initial preferences scope follows existing daemon settings:
+### Appearance (desktop-local)
+
+- Appearance: Follow system, Dark or Light. Follow system is the default.
+- List density: Comfortable or Compact.
+- Changes apply immediately and are saved in the desktop client's local desktop.json preferences file under the user's DM configuration directory. These values are never sent to the daemon.
+- If the local preference file is missing, use defaults. If it is malformed, keep defaults and report a recoverable error; writes must be atomic and use owner-only file permissions.
+
+### Downloads (daemon settings)
+
 - Default download directory.
 - Maximum concurrent downloads.
 - Per-download connection/segment limit, where exposed by the daemon.
-- Download speed limit, where exposed by the daemon.
+- Download speed limits, where exposed by the daemon.
 
-Do not invent settings that the daemon API does not support. Explain settings that affect future downloads separately from settings that affect active transfers.
+Explain settings that affect future downloads separately from settings that affect active transfers. Do not invent settings that the daemon API does not support. Appearance remains usable when the daemon is offline; daemon settings remain disabled or report that the daemon is unavailable.
 
-Do not add theme, accent-color, or font selectors to DM. Appearance is controlled by the host desktop and GTK configuration.
 
 ## 8. Destructive and lifecycle interactions
 
@@ -149,57 +147,55 @@ Closing the application window only closes the client. It must not silently quit
 
 ## 9. Accessibility and input
 
-- Prefer standard GTK controls because they provide platform keyboard and accessibility behavior.
-- Every icon-only control needs an explicit accessible name and a tooltip.
-- Every input must have a programmatic label; placeholder text is not a label.
-- All actions must be usable with keyboard navigation. Focus must remain visible.
-- Support large text and high-contrast themes without clipping or hiding essential information.
-- Do not communicate status through color alone.
-- Keep hit targets and row actions usable with pointer, touch, and keyboard input.
-- Test the application with Orca and GTK Inspector's accessibility tools.
+- Every icon-only control needs an explicit accessible name and tooltip.
+- Every input has a programmatic label; placeholder text is not a label.
+- All actions are usable with keyboard navigation and visible focus.
+- Support large text and high-contrast appearances without clipping or hiding essential information.
+- Do not communicate status through color alone. The dark, light and high-contrast palettes must meet contrast requirements for text and controls.
+- Keep hit targets and row actions usable with pointer, touch and keyboard input.
+- The selected row and inspector context must be announced meaningfully to screen readers. Test with Orca and GTK Inspector's accessibility tools.
+- Space pauses/resumes only when the selected download currently exposes that action; Delete/Backspace must follow the same removal confirmation rules as pointer actions.
+
 
 ## 10. Motion and visual effects
 
-Do not add animation unless it communicates a real state transition or the user explicitly requests it. Keep interaction feedback short and avoid motion that delays an action.
+Use short transitions only when they communicate a real state change. Progress movement may be eased but must remain visually tied to daemon updates. The inspector bottom-sheet transition should be no longer than 200 ms. Respect GTK's reduced-motion preference.
 
-Do not use gradients, glow effects, decorative blur, or large backdrop effects. Do not animate layout dimensions or position. Respect reduced-motion preferences where animation is present.
+Do not add decorative blur, glow or large backdrop effects. Avoid animating layout dimensions or delaying a user action.
+
 
 ## 11. UI Skills application rules
 
-The UI Skills router is the selection layer for this UI phase. Use the smallest relevant skill set; do not load unrelated web/metadata skills.
+Use the smallest relevant UI skill set. Apply native GTK equivalents of baseline UI, accessibility and motion guidance.
 
-Apply the useful principles from `baseline-ui` with GTK-native equivalents:
-- Use existing GTK widgets and accessible behavior instead of introducing React, Tailwind, Base UI, Radix, or hand-built web primitives.
-- Use the user's GTK theme and system appearance instead of hard-coded colors or app-owned design tokens.
-- Keep one clear primary action per view and keep secondary actions visually quiet.
-- Give empty states one clear next action.
-- Show validation errors beside the relevant field or action.
-- Confirm destructive operations or offer undo.
-- Avoid unnecessary animation, gradients, blur, glow, and excessive accent colors.
-- Use tabular figures for dense numeric information where supported.
+- Keep widget behavior, data and accessibility native GTK; the HTML prototype is a visual/interaction reference, not runtime code.
+- Keep appearance centralized in the semantic token palettes and shared stylesheet. Do not hard-code color values in widget source.
+- Keep one clear primary action per view; keep secondary actions visually quiet.
+- Give empty states one clear next action and place validation errors beside their field or action.
+- Confirm destructive operations or offer undo. Keep Cancel distinct from Remove.
+- Keep list virtualization and the daemon as the only owner of download state.
 
-The skill's Tailwind classes, React animation libraries, ARIA-specific instructions, and browser safe-area rules do not apply literally to this GTK4 application. Use GTK accessibility properties, native focus handling, GTK style classes, and platform conventions instead. Any skill guidance that conflicts with this native GTK direction or the platform contract above is out of scope.
 
 ## 12. Implementation review checklist
 
-Before calling the GTK UI phase complete, verify:
+Before calling the v3 UI complete, verify:
 
-- The window and download list remain usable at 1024×600 and at narrower widths.
-- The app follows the active GTK theme without imposing its own palette, accent, or typography.
-- Light, dark, and high-contrast system appearances work without hard-coded foreground/background colors.
-- Large text does not clip filenames, controls, status, or dialogs.
-- Keyboard-only use covers navigation, adding, pausing, resuming, canceling, and removing.
-- Orca announces controls and download status meaningfully.
-- Progress is accurate for known sizes and never fabricates a percentage for unknown sizes.
-- Empty, loading, daemon-disconnected, failed, paused, and completed states are represented.
-- Destructive file deletion is distinguishable from removing a history entry.
-- Closing the client leaves daemon downloads running.
-- On KDE Plasma (Wayland), test with the user's configured GTK theme (including Breeze GTK when available), light/dark preference, file chooser/portal behavior, keyboard focus, and window interactions.
-- On GNOME, verify the app remains usable without making Libadwaita a dependency.
-- The client does not require GNOME Shell, GNOME-only services, Qt libraries, or a custom theme package.
-- GTK4 remains isolated in `desktop/`; daemon packages remain independent of GTK/cgo.
+- The workspace follows the v3 hierarchy at 1280×820 and remains usable at 1180, 1024, 900 and 700 px.
+- The inspector is a right pane at 1180 px and above, and a bottom sheet below that breakpoint.
+- Dark, light and both high-contrast palettes render without undefined tokens or CSS parsing warnings.
+- Text and controls meet contrast requirements in each palette; state remains understandable without color.
+- Comfortable and Compact density preferences survive restart and do not alter daemon settings.
+- The list remains virtualized and all displayed progress, speed, ETA and segment information comes from daemon data.
+- Search, filters, sort, bulk actions, add, pause, resume, cancel, retry, remove, delete and open-file actions work with mouse and keyboard.
+- Empty, loading, offline and per-download failure states remain understandable.
+- Keyboard navigation, focus, Orca announcements, large text and reduced motion are verified.
+- KDE Plasma/Wayland file chooser, clipboard and window behavior work without GNOME services.
+- The client does not require Qt, GNOME Shell, a WebView or a second download engine.
+
 
 ## 13. Governing references
+
+- DM v3 visual reference: the author's dm-flow-prototype-v3.html design prototype (shared in the project Library; illustrative only, not shipped runtime code).
 
 - Repository architecture: `docs/ARCHITECTURE.md`.
 - Repository workflow and verification policy: `AGENTS.md` and `PROCESS.md`.

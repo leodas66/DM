@@ -13,7 +13,7 @@ import (
 
 func (w *window) buildInspector() *gtk.Box {
 	panel := gtk.NewBox(gtk.OrientationVertical, 10)
-	panel.SetSizeRequest(292, -1)
+	panel.AddCSSClass("dm-inspector")
 	panel.SetMarginTop(14)
 	panel.SetMarginBottom(14)
 	panel.SetMarginStart(14)
@@ -36,7 +36,8 @@ func (w *window) buildInspector() *gtk.Box {
 	header.Append(closeButton)
 	panel.Append(header)
 
-	w.inspectorStatus = newDimLabel("")
+	w.inspectorStatus = newDimLabel("Select a download to see its progress, transfer details and saved location.")
+	w.inspectorStatus.SetWrap(true)
 	panel.Append(w.inspectorStatus)
 	w.inspectorProgress = gtk.NewProgressBar()
 	w.inspectorProgress.SetShowText(true)
@@ -105,6 +106,14 @@ func (w *window) buildInspector() *gtk.Box {
 		}
 	})
 	panel.Append(w.inspectorDelete)
+
+	w.inspectorPrimary.SetVisible(false)
+	w.inspectorCancel.SetVisible(false)
+	w.inspectorOpen.SetVisible(false)
+	w.inspectorRemove.SetVisible(false)
+	w.inspectorDelete.SetVisible(false)
+	w.inspectorSource.SetLabel("—")
+	w.inspectorDestination.SetLabel("—")
 	return panel
 }
 
@@ -119,7 +128,9 @@ func (w *window) showDetails(id string) {
 
 func (w *window) hideDetails() {
 	w.selectedID = ""
-	w.inspectorRevealer.SetRevealChild(false)
+	w.refreshInspector()
+	width, _ := w.win.ObjectProperty("default-width").(int)
+	w.inspectorRevealer.SetRevealChild(width >= 1180)
 }
 
 func (w *window) inspectorPrimaryAction() {
@@ -138,7 +149,21 @@ func (w *window) inspectorPrimaryAction() {
 }
 
 func (w *window) refreshInspector() {
-	if w.selectedID == "" || w.inspectorTitle == nil {
+	if w.inspectorTitle == nil {
+		return
+	}
+	if w.selectedID == "" {
+		w.inspectorTitle.SetLabel("Download details")
+		w.inspectorHost.SetLabel("")
+		w.inspectorStatus.SetLabel("Select a download from the list to inspect its progress, speed, source and saved location.")
+		w.inspectorProgress.SetVisible(false)
+		w.inspectorStats.SetLabel("")
+		w.inspectorSource.SetLabel("—")
+		w.inspectorDestination.SetLabel("—")
+		w.inspectorSegments.SetLabel("")
+		for _, control := range []*gtk.Button{w.inspectorPrimary, w.inspectorCancel, w.inspectorOpen, w.inspectorRemove, w.inspectorDelete} {
+			control.SetVisible(false)
+		}
 		return
 	}
 	d, ok := w.store.get(w.selectedID)

@@ -24,9 +24,24 @@ import (
 // download list. All GTK access happens on the main loop; network work runs in
 // goroutines and posts results back through glib.IdleAdd.
 type window struct {
-	app       *gtk.Application
-	connectFn func() (*dmapi.Client, error)
-	win       *gtk.ApplicationWindow
+	app            *gtk.Application
+	version        string
+	prefs          clientPrefs
+	prefsPath      string
+	prefsWarning   string
+	css            *gtk.CSSProvider
+	themeButton    *gtk.Button
+	sidebar        *gtk.Box
+	brandText      *gtk.Box
+	navHeading     *gtk.Label
+	categoryHeader *gtk.Box
+	networkCard    *gtk.Box
+	body           *gtk.Box
+	layoutSet      bool
+	isRail         bool
+	layoutWide     bool
+	connectFn      func() (*dmapi.Client, error)
+	win            *gtk.ApplicationWindow
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -47,6 +62,7 @@ type window struct {
 	networkSpeedLabel    *gtk.Label
 	selectedID           string
 	inspectorRevealer    *gtk.Revealer
+	inspectorPanel       *gtk.Box
 	inspectorTitle       *gtk.Label
 	inspectorHost        *gtk.Label
 	inspectorStatus      *gtk.Label
@@ -64,6 +80,7 @@ type window struct {
 	prefsDialog          *preferencesDialog
 	catsDialog           *categoriesDialog
 	rowTimer             coreglib.SourceHandle
+	layoutTimer          coreglib.SourceHandle
 	toastSource          coreglib.SourceHandle
 	retryCh              chan struct{}
 
@@ -78,6 +95,14 @@ type window struct {
 	stack           *gtk.Stack
 	model           *gtk.StringList
 	listView        *gtk.ListView
+	tableHeader     *gtk.Box
+	sizeHeader      *gtk.Label
+	speedHeader     *gtk.Label
+	etaHeader       *gtk.Label
+	columnsSet      bool
+	showSizeColumn  bool
+	showSpeedColumn bool
+	showETAColumn   bool
 	loadingSpinner  *gtk.Spinner
 	offlineDetail   *gtk.Label
 	emptyTitle      *gtk.Label
@@ -111,19 +136,22 @@ type window struct {
 type filterRow struct {
 	filter filter
 	row    *gtk.ListBoxRow
+	name   *gtk.Label
 	count  *gtk.Label
 }
 
 type categoryRow struct {
 	filter filter
 	row    *gtk.ListBoxRow
+	name   *gtk.Label
 	count  *gtk.Label
 }
 
-func newWindow(app *gtk.Application, connect func() (*dmapi.Client, error)) *window {
+func newWindow(app *gtk.Application, connect func() (*dmapi.Client, error), version string) *window {
 	ctx, cancel := context.WithCancel(context.Background())
 	w := &window{
 		app:           app,
+		version:       version,
 		connectFn:     connect,
 		ctx:           ctx,
 		cancel:        cancel,
@@ -136,6 +164,7 @@ func newWindow(app *gtk.Application, connect func() (*dmapi.Client, error)) *win
 		visibleRows:   make(map[string]*row),
 		dirty:         make(map[string]bool),
 	}
+	w.loadClientPrefs()
 	w.build()
 	return w
 }
@@ -143,13 +172,14 @@ func newWindow(app *gtk.Application, connect func() (*dmapi.Client, error)) *win
 func (w *window) build() {
 	w.win = gtk.NewApplicationWindow(w.app)
 	w.win.SetTitle("DM")
-	w.win.SetDefaultSize(1024, 640)
+	w.win.SetDefaultSize(1280, 820)
 	w.win.ConnectCloseRequest(func() bool {
 		w.shutdown()
 		return false
 	})
 
 	header := gtk.NewHeaderBar()
+	header.AddCSSClass("dm-header")
 
 	w.sidebarToggle = newIconButton("view-list-symbolic", "Hide filters")
 	w.sidebarToggle.ConnectClicked(func() {
@@ -164,10 +194,10 @@ func (w *window) build() {
 	titleBox := gtk.NewBox(gtk.OrientationVertical, 0)
 	titleBox.SetMarginStart(8)
 	w.titleLabel = newLabel(w.filter.label)
-	w.titleLabel.AddCSSClass("title")
+	w.titleLabel.AddCSSClass("dm-page-title")
 	w.titleLabel.SetHAlign(gtk.AlignStart)
 	w.subtitleLabel = newDimLabel("")
-	w.subtitleLabel.AddCSSClass("caption")
+	w.subtitleLabel.AddCSSClass("dm-page-meta")
 	w.subtitleLabel.SetHAlign(gtk.AlignStart)
 	titleBox.Append(w.titleLabel)
 	titleBox.Append(w.subtitleLabel)
@@ -190,6 +220,14 @@ func (w *window) build() {
 	addButton.ConnectClicked(func() { w.showAddDialog() })
 	header.PackEnd(addButton)
 
+	w.themeButton = newIconButton("weather-clear-symbolic", "Switch appearance")
+	w.themeButton.ConnectClicked(func() { w.toggleAppearance() })
+	header.PackEnd(w.themeButton)
+
+	prefsButton := newIconButton("emblem-system-symbolic", "Preferences")
+	prefsButton.ConnectClicked(func() { w.showPreferences() })
+	header.PackEnd(prefsButton)
+
 	menu := gio.NewMenu()
 	primary := gio.NewMenu()
 	primary.Append("Preferences", "win.preferences")
@@ -211,6 +249,7 @@ func (w *window) build() {
 	w.win.NotifyProperty("default-width", w.adaptSidebar)
 
 	content := gtk.NewBox(gtk.OrientationHorizontal, 0)
+	content.AddCSSClass("dm-shell")
 	content.SetVExpand(true)
 
 	w.sidebarRevealer = gtk.NewRevealer()
@@ -222,19 +261,22 @@ func (w *window) build() {
 	content.Append(gtk.NewSeparator(gtk.OrientationVertical))
 
 	mainArea := gtk.NewBox(gtk.OrientationVertical, 0)
+	mainArea.AddCSSClass("dm-main")
 	mainArea.SetHExpand(true)
 	mainArea.SetVExpand(true)
 	mainArea.Append(w.buildBanner())
 	mainArea.Append(w.buildToolbar())
 
 	body := gtk.NewBox(gtk.OrientationHorizontal, 0)
+	w.body = body
 	body.SetHExpand(true)
 	body.SetVExpand(true)
 	body.Append(w.buildStack())
 	w.inspectorRevealer = gtk.NewRevealer()
 	w.inspectorRevealer.SetTransitionType(gtk.RevealerTransitionTypeSlideLeft)
 	w.inspectorRevealer.SetTransitionDuration(150)
-	w.inspectorRevealer.SetChild(w.buildInspector())
+	w.inspectorPanel = w.buildInspector()
+	w.inspectorRevealer.SetChild(w.inspectorPanel)
 	w.inspectorRevealer.SetRevealChild(false)
 	body.Append(w.inspectorRevealer)
 	mainArea.Append(body)
@@ -243,6 +285,7 @@ func (w *window) build() {
 
 	root := gtk.NewBox(gtk.OrientationVertical, 0)
 	root.Append(content)
+	w.win.AddCSSClass("dm-root")
 	w.win.SetChild(root)
 
 	// Ctrl+N adds a download from anywhere in the window.
@@ -288,7 +331,8 @@ func (w *window) build() {
 
 func (w *window) buildSidebar() *gtk.Box {
 	box := gtk.NewBox(gtk.OrientationVertical, 0)
-	box.SetSizeRequest(208, -1)
+	box.AddCSSClass("dm-sidebar")
+	box.SetSizeRequest(232, -1)
 
 	scroll := gtk.NewScrolledWindow()
 	scroll.SetPolicy(gtk.PolicyNever, gtk.PolicyAutomatic)
@@ -298,6 +342,25 @@ func (w *window) buildSidebar() *gtk.Box {
 	inner.SetMarginTop(6)
 	inner.SetMarginBottom(6)
 
+	brand := gtk.NewBox(gtk.OrientationHorizontal, 10)
+	brand.AddCSSClass("dm-brand")
+	mark := gtk.NewBox(gtk.OrientationVertical, 0)
+	mark.AddCSSClass("dm-brand-mark")
+	brandIcon := gtk.NewImageFromIconName("folder-download-symbolic")
+	brandIcon.SetPixelSize(18)
+	mark.Append(brandIcon)
+	brandText := gtk.NewBox(gtk.OrientationVertical, 0)
+	w.brandText = brandText
+	brandName := newLabel("dm")
+	brandName.AddCSSClass("dm-brand-name")
+	brandText.Append(brandName)
+	brandVersion := newDimLabel(w.version)
+	brandVersion.AddCSSClass("dm-brand-version")
+	brandText.Append(brandVersion)
+	brand.Append(mark)
+	brand.Append(brandText)
+	inner.Append(brand)
+
 	// navigation-sidebar is the standard GTK class for a compact navigation
 	// list: it gives theme-default selection styling instead of a full-width
 	// accent block.
@@ -306,8 +369,9 @@ func (w *window) buildSidebar() *gtk.Box {
 	w.filterList.AddCSSClass("navigation-sidebar")
 	w.filterList.SetMarginStart(6)
 	w.filterList.SetMarginEnd(6)
-	sectionLabel := newDimLabel("Downloads")
-	sectionLabel.AddCSSClass("caption")
+	sectionLabel := newDimLabel("LIBRARY")
+	w.navHeading = sectionLabel
+	sectionLabel.AddCSSClass("dm-nav-heading")
 	sectionLabel.SetMarginTop(8)
 	sectionLabel.SetMarginBottom(2)
 	sectionLabel.SetMarginStart(10)
@@ -325,8 +389,8 @@ func (w *window) buildSidebar() *gtk.Box {
 		{filterCompleted, "object-select-symbolic", "Completed"},
 		{filterFailed, "dialog-error-symbolic", "Failed"},
 	} {
-		row, count := addSidebarRow(w.filterList, dest.icon, dest.label)
-		fr := &filterRow{filter: filter{kind: dest.kind, label: dest.label}, row: row, count: count}
+		row, name, count := addSidebarRow(w.filterList, dest.icon, dest.label)
+		fr := &filterRow{filter: filter{kind: dest.kind, label: dest.label}, row: row, name: name, count: count}
 		w.filterRows = append(w.filterRows, fr)
 		w.filterByRow[row] = fr
 	}
@@ -334,12 +398,13 @@ func (w *window) buildSidebar() *gtk.Box {
 
 	w.categoryBox = gtk.NewBox(gtk.OrientationVertical, 0)
 	categoryHeader := gtk.NewBox(gtk.OrientationHorizontal, 4)
+	w.categoryHeader = categoryHeader
 	categoryHeader.SetMarginTop(12)
 	categoryHeader.SetMarginBottom(2)
 	categoryHeader.SetMarginStart(10)
 	categoryHeader.SetMarginEnd(6)
 	categoryLabel := newDimLabel("Categories")
-	categoryLabel.AddCSSClass("caption")
+	categoryLabel.AddCSSClass("dm-nav-heading")
 	categoryLabel.SetHExpand(true)
 	categoryHeader.Append(categoryLabel)
 	newCategory := newIconButton("list-add-symbolic", "New category")
@@ -360,6 +425,8 @@ func (w *window) buildSidebar() *gtk.Box {
 	box.Append(scroll)
 
 	network := gtk.NewBox(gtk.OrientationVertical, 3)
+	w.networkCard = network
+	network.AddCSSClass("dm-network-card")
 	network.SetMarginTop(10)
 	network.SetMarginBottom(12)
 	network.SetMarginStart(14)
@@ -367,11 +434,12 @@ func (w *window) buildSidebar() *gtk.Box {
 	network.Append(sectionHeading("Network"))
 	w.networkActiveLabel = newDimLabel("0 active")
 	w.networkSpeedLabel = newLabel("0.0 MiB/s")
-	w.networkSpeedLabel.AddCSSClass("title-3")
+	w.networkSpeedLabel.AddCSSClass("dm-network-speed")
 	network.Append(w.networkActiveLabel)
 	network.Append(w.networkSpeedLabel)
 	box.Append(gtk.NewSeparator(gtk.OrientationHorizontal))
 	box.Append(network)
+	w.sidebar = box
 
 	w.filterList.ConnectRowSelected(func(row *gtk.ListBoxRow) {
 		if row == nil || w.updatingSelection {
@@ -394,8 +462,10 @@ func (w *window) buildSidebar() *gtk.Box {
 }
 
 // addSidebarRow appends one navigation row and returns it with its count label.
-func addSidebarRow(list *gtk.ListBox, icon, text string) (*gtk.ListBoxRow, *gtk.Label) {
+func addSidebarRow(list *gtk.ListBox, icon, text string) (*gtk.ListBoxRow, *gtk.Label, *gtk.Label) {
 	row := gtk.NewListBoxRow()
+	row.AddCSSClass("dm-nav-row")
+	row.SetTooltipText(text)
 	row.SetActivatable(true)
 
 	content := gtk.NewBox(gtk.OrientationHorizontal, 8)
@@ -417,7 +487,8 @@ func addSidebarRow(list *gtk.ListBox, icon, text string) (*gtk.ListBoxRow, *gtk.
 	content.Append(count)
 	row.SetChild(content)
 	list.Append(row)
-	return row, count
+	count.AddCSSClass("dm-nav-count")
+	return row, name, count
 }
 
 func (w *window) buildBanner() *gtk.Box {
@@ -446,6 +517,7 @@ func (w *window) buildBanner() *gtk.Box {
 
 func (w *window) buildToast() *gtk.Box {
 	bar := gtk.NewBox(gtk.OrientationHorizontal, 10)
+	bar.AddCSSClass("dm-toast")
 	bar.SetMarginTop(6)
 	bar.SetMarginBottom(6)
 	bar.SetMarginStart(12)
@@ -549,6 +621,7 @@ func (w *window) buildStack() *gtk.Stack {
 			return
 		}
 		r.setDownload(d, w.store.rate(id))
+		r.setColumns(w.showSizeColumn, w.showSpeedColumn, w.showETAColumn)
 		w.visibleRows[id] = r
 	})
 	factory.ConnectUnbind(func(obj *coreglib.Object) {
@@ -564,14 +637,36 @@ func (w *window) buildStack() *gtk.Stack {
 	})
 
 	w.listView = gtk.NewListView(selection, &factory.ListItemFactory)
-	w.listView.SetShowSeparators(true)
+	w.listView.SetShowSeparators(false)
+
+	w.tableHeader = gtk.NewBox(gtk.OrientationHorizontal, 8)
+	w.tableHeader.AddCSSClass("dm-table-header")
+	w.tableHeader.SetMarginTop(8)
+	w.tableHeader.SetMarginBottom(6)
+	w.tableHeader.SetMarginStart(12)
+	w.tableHeader.SetMarginEnd(12)
+	w.tableHeader.Append(tableHeaderLabel("Name", 170, true))
+	w.tableHeader.Append(tableHeaderLabel("Progress", 125, false))
+	w.sizeHeader = tableHeaderLabel("Size", 58, false)
+	w.tableHeader.Append(w.sizeHeader)
+	w.speedHeader = tableHeaderLabel("Speed", 66, false)
+	w.tableHeader.Append(w.speedHeader)
+	w.etaHeader = tableHeaderLabel("Left", 55, false)
+	w.tableHeader.Append(w.etaHeader)
+	w.tableHeader.Append(tableHeaderLabel("Actions", 62, false))
 
 	scroller := gtk.NewScrolledWindow()
 	scroller.SetPolicy(gtk.PolicyNever, gtk.PolicyAutomatic)
 	scroller.SetHExpand(true)
 	scroller.SetVExpand(true)
 	scroller.SetChild(w.listView)
-	w.stack.AddNamed(scroller, "list")
+
+	listPage := gtk.NewBox(gtk.OrientationVertical, 0)
+	listPage.SetHExpand(true)
+	listPage.SetVExpand(true)
+	listPage.Append(w.tableHeader)
+	listPage.Append(scroller)
+	w.stack.AddNamed(listPage, "list")
 
 	w.stack.SetVisibleChildName("loading")
 	return w.stack
@@ -620,6 +715,15 @@ func itemID(item *gtk.ListItem) string {
 
 func (w *window) present() {
 	w.win.Present()
+	w.installAppearance()
+	w.adaptSidebar()
+	if w.prefsWarning != "" {
+		w.toast("Using default appearance preferences: " + w.prefsWarning)
+	}
+	w.layoutTimer = coreglib.TimeoutAdd(250, func() bool {
+		w.adaptSidebar()
+		return w.ctx.Err() == nil
+	})
 	w.loadingSpinner.Start()
 	go w.loop()
 }
@@ -943,14 +1047,18 @@ func (w *window) updateCategories(categories []model.Category) {
 	w.categoryByRow = make(map[*gtk.ListBoxRow]filter)
 
 	for _, c := range categories {
-		row, count := addSidebarRow(w.categoryList, "folder-symbolic", c.Name)
+		row, name, count := addSidebarRow(w.categoryList, "folder-symbolic", c.Name)
 		f := filter{kind: filterCategory, categoryID: c.ID, label: c.Name}
-		w.categoryRows = append(w.categoryRows, &categoryRow{filter: f, row: row, count: count})
+		w.categoryRows = append(w.categoryRows, &categoryRow{filter: f, row: row, name: name, count: count})
 		w.categoryByRow[row] = f
 	}
 
 	if w.filter.kind == filterCategory && !w.categoryExists(w.filter.categoryID) {
 		w.setFilterSilently(filter{kind: filterAll, label: "All Downloads"})
+	}
+	w.categoryBox.SetVisible(len(categories) > 0 && !w.isRail)
+	if w.categoryHeader != nil {
+		w.categoryHeader.SetVisible(len(categories) > 0 && !w.isRail)
 	}
 	w.syncSelection()
 }
@@ -1007,25 +1115,103 @@ func (w *window) syncSelection() {
 	}
 }
 
-// sidebarBreakpoint is the window width below which the filter sidebar is
-// hidden automatically. The header toggle still opens it on demand.
-const sidebarBreakpoint = 820
+// sidebarBreakpoint is the width below which the full sidebar collapses
+// to an icon rail. All navigation destinations remain reachable.
+const sidebarBreakpoint = 900
+const inspectorBreakpoint = 1180
 
-// adaptSidebar collapses the sidebar on narrow windows so the list keeps its
-// room, and restores it when there is space again unless the user toggled it.
+// adaptSidebar responds to the allocated window width. It is called on initial
+// presentation and from a small main-loop poll because default-width is only
+// the requested size and does not change when the user resizes the window.
 func (w *window) adaptSidebar() {
-	width, ok := w.win.ObjectProperty("default-width").(int)
-	if !ok || width <= 0 {
+	if w.win == nil {
 		return
 	}
-	switch {
-	case width < sidebarBreakpoint && w.sidebarRevealer.RevealChild():
-		w.setSidebarVisible(false)
-		w.sidebarAuto = true
-	case width >= sidebarBreakpoint && w.sidebarAuto:
-		w.setSidebarVisible(true)
-		w.sidebarAuto = false
+	width := w.win.Width()
+	if width <= 0 {
+		return
 	}
+
+	rail := width < sidebarBreakpoint
+	wide := width >= inspectorBreakpoint
+	showSize := width >= 900
+	showSpeed := width >= 1024
+	showETA := width >= 1180
+	if !w.columnsSet || showSize != w.showSizeColumn || showSpeed != w.showSpeedColumn || showETA != w.showETAColumn {
+		w.showSizeColumn = showSize
+		w.showSpeedColumn = showSpeed
+		w.showETAColumn = showETA
+		if w.sizeHeader != nil {
+			w.sizeHeader.SetVisible(showSize)
+		}
+		if w.speedHeader != nil {
+			w.speedHeader.SetVisible(showSpeed)
+		}
+		if w.etaHeader != nil {
+			w.etaHeader.SetVisible(showETA)
+		}
+		for _, visibleRow := range w.visibleRows {
+			visibleRow.setColumns(showSize, showSpeed, showETA)
+		}
+		w.columnsSet = true
+	}
+	if !w.layoutSet || rail != w.isRail {
+		if w.sidebar != nil {
+			if rail {
+				w.sidebar.SetSizeRequest(64, -1)
+				w.sidebar.AddCSSClass("dm-sidebar-rail")
+			} else {
+				w.sidebar.SetSizeRequest(232, -1)
+				w.sidebar.RemoveCSSClass("dm-sidebar-rail")
+			}
+		}
+		if w.brandText != nil {
+			w.brandText.SetVisible(!rail)
+		}
+		if w.navHeading != nil {
+			w.navHeading.SetVisible(!rail)
+		}
+		for _, fr := range w.filterRows {
+			fr.name.SetVisible(!rail)
+			fr.count.SetVisible(!rail)
+		}
+		for _, cr := range w.categoryRows {
+			cr.name.SetVisible(!rail)
+			cr.count.SetVisible(!rail)
+		}
+		if w.categoryHeader != nil {
+			w.categoryHeader.SetVisible(!rail && len(w.categoryRows) > 0)
+		}
+		if w.categoryBox != nil {
+			w.categoryBox.SetVisible(!rail && len(w.categoryRows) > 0)
+		}
+		if w.networkCard != nil {
+			w.networkCard.SetVisible(!rail)
+		}
+		w.isRail = rail
+	}
+
+	if !w.layoutSet || wide != w.layoutWide {
+		if w.body != nil && w.inspectorRevealer != nil {
+			if wide {
+				w.body.SetOrientation(gtk.OrientationHorizontal)
+				w.inspectorRevealer.SetTransitionType(gtk.RevealerTransitionTypeSlideLeft)
+				w.inspectorRevealer.SetSizeRequest(336, -1)
+				w.inspectorRevealer.SetRevealChild(true)
+				w.inspectorPanel.RemoveCSSClass("dm-inspector-sheet")
+				w.inspectorPanel.AddCSSClass("dm-inspector-wide")
+			} else {
+				w.body.SetOrientation(gtk.OrientationVertical)
+				w.inspectorRevealer.SetTransitionType(gtk.RevealerTransitionTypeSlideUp)
+				w.inspectorRevealer.SetSizeRequest(-1, 360)
+				w.inspectorRevealer.SetRevealChild(w.selectedID != "")
+				w.inspectorPanel.RemoveCSSClass("dm-inspector-wide")
+				w.inspectorPanel.AddCSSClass("dm-inspector-sheet")
+			}
+		}
+		w.layoutWide = wide
+	}
+	w.layoutSet = true
 }
 
 func (w *window) setSidebarVisible(visible bool) {
@@ -1175,10 +1361,6 @@ func (w *window) showAddDialog() {
 }
 
 func (w *window) showPreferences() {
-	if w.client == nil {
-		w.toast("Not connected to the DM daemon.")
-		return
-	}
 	if w.prefsDialog != nil {
 		w.prefsDialog.present()
 		return
@@ -1213,6 +1395,10 @@ func (w *window) showCategories() {
 func (w *window) shutdown() {
 	w.cancel()
 	w.client = nil
+	if w.layoutTimer != 0 {
+		coreglib.SourceRemove(w.layoutTimer)
+		w.layoutTimer = 0
+	}
 	if w.rowTimer != 0 {
 		coreglib.SourceRemove(w.rowTimer)
 		w.rowTimer = 0

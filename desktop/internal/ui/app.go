@@ -21,7 +21,7 @@ func Run(version string, connect func() (*dmapi.Client, error)) int {
 			existing.Present()
 			return
 		}
-		newWindow(app, connect).present()
+		newWindow(app, connect, version).present()
 	})
 
 	quit := gio.NewSimpleAction("quit", nil)
