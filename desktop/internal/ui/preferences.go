@@ -89,6 +89,8 @@ type preferencesDialog struct {
 	connectionsSpin *gtk.SpinButton
 	globalLimitSpin *gtk.SpinButton
 	perDownloadSpin *gtk.SpinButton
+	appearanceDrop  *gtk.DropDown
+	densityDrop     *gtk.DropDown
 	errorBox        *gtk.Box
 	errorLabel      *gtk.Label
 	saveButton      *gtk.Button
@@ -123,6 +125,16 @@ func newPreferencesDialog(w *window) *preferencesDialog {
 	content.SetMarginStart(18)
 	content.SetMarginEnd(18)
 
+	content.Append(sectionHeading("Appearance"))
+	d.appearanceDrop = gtk.NewDropDownFromStrings([]string{"Follow system", "Dark", "Light"})
+	d.appearanceDrop.SetSelected(themeChoiceIndex(w.prefs.Theme))
+	content.Append(dropdownRow("_Appearance", d.appearanceDrop, "Controls DM's palette without changing your desktop theme."))
+
+	d.densityDrop = gtk.NewDropDownFromStrings([]string{"Comfortable", "Compact"})
+	d.densityDrop.SetSelected(densityChoiceIndex(w.prefs.Density))
+	content.Append(dropdownRow("_List density", d.densityDrop, "Compact rows show more downloads at once."))
+
+	content.Append(gtk.NewSeparator(gtk.OrientationHorizontal))
 	content.Append(sectionHeading("Downloads"))
 
 	d.dirEntry = gtk.NewEntry()
@@ -173,6 +185,9 @@ func newPreferencesDialog(w *window) *preferencesDialog {
 	d.errorBox, d.errorLabel = errorRow()
 	content.Append(d.errorBox)
 
+	d.appearanceDrop.NotifyProperty("selected", d.persistAppearance)
+	d.densityDrop.NotifyProperty("selected", d.persistAppearance)
+
 	// Large text or a small screen must not clip the form: the dialog caps its
 	// natural height and scrolls instead.
 	scroll := gtk.NewScrolledWindow()
@@ -197,6 +212,68 @@ func sectionHeading(text string) *gtk.Label {
 	l := newLabel(text)
 	l.AddCSSClass("heading")
 	return l
+}
+
+func themeChoiceIndex(choice themeChoice) uint {
+	switch choice {
+	case themeDark:
+		return 1
+	case themeLight:
+		return 2
+	default:
+		return 0
+	}
+}
+
+func densityChoiceIndex(choice densityChoice) uint {
+	if choice == densityCompact {
+		return 1
+	}
+	return 0
+}
+
+func (d *preferencesDialog) persistAppearance() {
+	prefs := d.w.prefs
+	switch d.appearanceDrop.Selected() {
+	case 1:
+		prefs.Theme = themeDark
+	case 2:
+		prefs.Theme = themeLight
+	default:
+		prefs.Theme = themeSystem
+	}
+	if d.densityDrop.Selected() == 1 {
+		prefs.Density = densityCompact
+	} else {
+		prefs.Density = densityComfortable
+	}
+	if err := d.w.setClientPrefs(prefs); err != nil {
+		d.showError("Appearance changed but could not be saved: " + err.Error())
+		return
+	}
+	if d.errorBox != nil {
+		d.errorBox.SetVisible(false)
+	}
+}
+
+func dropdownRow(label string, control *gtk.DropDown, help string) *gtk.Box {
+	row := gtk.NewBox(gtk.OrientationVertical, 4)
+	l := gtk.NewLabel("")
+	l.SetUseUnderline(true)
+	l.SetTextWithMnemonic(label)
+	l.SetHAlign(gtk.AlignStart)
+	l.SetMnemonicWidget(control)
+	setAccessibleLabel(control.Accessible, strings.ReplaceAll(label, "_", ""))
+	row.Append(l)
+	control.SetHExpand(true)
+	row.Append(control)
+	if help != "" {
+		h := newDimLabel(help)
+		h.AddCSSClass("caption")
+		h.SetWrap(true)
+		row.Append(h)
+	}
+	return row
 }
 
 // numberSpin builds an integer spinner with no decimals.
