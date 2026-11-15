@@ -95,7 +95,6 @@ jobs:
           test -s dm-linux-aarch64.tar.gz
           sha256sum dm-linux-*.tar.gz > SHA256SUMS
 
-          gh release delete continuous --yes || true
           git tag -f continuous "$GITHUB_SHA"
           git push origin +refs/tags/continuous:refs/tags/continuous
 
@@ -103,8 +102,17 @@ jobs:
           printf 'This rolling prerelease is refreshed by successful pushes to main.\n' >> release-notes.md
           printf '\nAssets include dm, dm-native-host and dm-desktop for Linux x86-64 and ARM64.\n' >> release-notes.md
 
-          gh release create continuous dm-linux-x86_64.tar.gz dm-linux-aarch64.tar.gz SHA256SUMS \
-            --target "$GITHUB_SHA" \
-            --title "Continuous build $(cat ../VERSION) (${GITHUB_SHA:0:7})" \
-            --notes-file release-notes.md \
-            --prerelease
+          title="Continuous build $(cat ../VERSION) (${GITHUB_SHA:0:7})"
+          if gh release view continuous >/dev/null 2>&1; then
+            # Replace the checksum first. During the asset refresh, clients
+            # reject any old/new combination rather than installing a mixture.
+            gh release upload continuous SHA256SUMS --clobber
+            gh release upload continuous dm-linux-x86_64.tar.gz dm-linux-aarch64.tar.gz --clobber
+            gh release edit continuous --title "$title" --notes-file release-notes.md --prerelease
+          else
+            gh release create continuous dm-linux-x86_64.tar.gz dm-linux-aarch64.tar.gz SHA256SUMS \
+              --target "$GITHUB_SHA" \
+              --title "$title" \
+              --notes-file release-notes.md \
+              --prerelease
+          fi
