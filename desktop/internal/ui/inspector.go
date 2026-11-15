@@ -83,27 +83,35 @@ func (w *window) buildInspector() *gtk.Box {
 
 	w.inspectorOpen = gtk.NewButtonWithLabel("Open File")
 	w.inspectorOpen.ConnectClicked(func() {
-		if w.selectedID != "" { w.openFile(w.selectedID) }
+		if w.selectedID != "" {
+			w.openFile(w.selectedID)
+		}
 	})
 	panel.Append(w.inspectorOpen)
 
 	w.inspectorRemove = gtk.NewButtonWithLabel("Remove from list")
 	w.inspectorRemove.ConnectClicked(func() {
-		if w.selectedID != "" { w.removeDownload(w.selectedID, false) }
+		if w.selectedID != "" {
+			w.removeDownload(w.selectedID, false)
+		}
 	})
 	panel.Append(w.inspectorRemove)
 
 	w.inspectorDelete = gtk.NewButtonWithLabel("Delete file…")
 	w.inspectorDelete.AddCSSClass("destructive-action")
 	w.inspectorDelete.ConnectClicked(func() {
-		if w.selectedID != "" { w.removeDownload(w.selectedID, true) }
+		if w.selectedID != "" {
+			w.removeDownload(w.selectedID, true)
+		}
 	})
 	panel.Append(w.inspectorDelete)
 	return panel
 }
 
 func (w *window) showDetails(id string) {
-	if _, ok := w.store.get(id); !ok { return }
+	if _, ok := w.store.get(id); !ok {
+		return
+	}
 	w.selectedID = id
 	w.inspectorRevealer.SetRevealChild(true)
 	w.refreshInspector()
@@ -116,7 +124,9 @@ func (w *window) hideDetails() {
 
 func (w *window) inspectorPrimaryAction() {
 	d, ok := w.store.get(w.selectedID)
-	if !ok { return }
+	if !ok {
+		return
+	}
 	switch d.Status {
 	case model.StatusRunning, model.StatusProbing, model.StatusQueued:
 		w.pauseDownload(d.ID)
@@ -128,9 +138,14 @@ func (w *window) inspectorPrimaryAction() {
 }
 
 func (w *window) refreshInspector() {
-	if w.selectedID == "" || w.inspectorTitle == nil { return }
+	if w.selectedID == "" || w.inspectorTitle == nil {
+		return
+	}
 	d, ok := w.store.get(w.selectedID)
-	if !ok { w.hideDetails(); return }
+	if !ok {
+		w.hideDetails()
+		return
+	}
 
 	text := describe(d, w.store.rate(d.ID))
 	w.inspectorTitle.SetLabel(text.Title)
@@ -139,7 +154,9 @@ func (w *window) refreshInspector() {
 	downloaded := dmapi.Downloaded(d)
 	if d.Size > 0 {
 		fraction := float64(downloaded)/float64(d.Size)
-		if fraction > 1 { fraction = 1 }
+		if fraction > 1 {
+			fraction = 1
+		}
 		w.inspectorProgress.SetFraction(fraction)
 		w.inspectorProgress.SetText(fmt.Sprintf("%d%%", int(fraction*100)))
 		w.inspectorProgress.SetVisible(true)
@@ -147,24 +164,32 @@ func (w *window) refreshInspector() {
 		w.inspectorProgress.SetVisible(false)
 	}
 	transfer := []string{"Downloaded: " + format.Bytes(downloaded)}
-	if d.Size > 0 { transfer = append(transfer, "Total: "+format.Bytes(d.Size)) }
+	if d.Size > 0 {
+		transfer = append(transfer, "Total: "+format.Bytes(d.Size))
+	}
 	if activeStatus(d.Status) {
 		rate := w.store.rate(d.ID)
 		if rate > 0 {
 			transfer = append(transfer, "Speed: "+format.Rate(rate))
 			if d.Size > downloaded {
-				if eta, ok := format.ETA(d.Size-downloaded, rate); ok { transfer = append(transfer, "Time left: "+eta) }
+				if eta, ok := format.ETA(d.Size-downloaded, rate); ok {
+					transfer = append(transfer, "Time left: "+eta)
+				}
 			}
 		}
 	}
 	w.inspectorStats.SetLabel(strings.Join(transfer, "\n"))
 
 	source := d.URL
-	if d.FinalURL != "" { source = d.FinalURL }
+	if d.FinalURL != "" {
+		source = d.FinalURL
+	}
 	w.inspectorSource.SetLabel(source)
 	w.inspectorSource.SetTooltipText(source)
 	destination := d.Dir
-	if d.Filename != "" { destination = filepath.Join(d.Dir, d.Filename) }
+	if d.Filename != "" {
+		destination = filepath.Join(d.Dir, d.Filename)
+	}
 	w.inspectorDestination.SetLabel(destination)
 	w.inspectorDestination.SetTooltipText(destination)
 	if len(d.Segments) == 0 {
