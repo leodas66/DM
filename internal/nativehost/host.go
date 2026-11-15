@@ -9,15 +9,19 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"os/exec"
 	"strings"
 	"time"
 
 	"github.com/vishwa/dm/internal/api"
 	"github.com/vishwa/dm/internal/model"
 	"github.com/vishwa/dm/internal/runtime"
+	"github.com/vishwa/dm/internal/uihandoff"
 )
 
-// Request is one message from the browser extension.
+// Request is one message from the browser extension. "open" asks the desktop
+// app to show a review dialog; "add" remains available to trusted CLI clients
+// that intentionally want to queue a download immediately.
 type Request struct {
 	// Command is "add" (queue a download) or "ping" (is the daemon there?).
 	Command string `json:"command"`
@@ -27,6 +31,8 @@ type Request struct {
 	Dir        string            `json:"dir,omitempty"`
 	CategoryID string            `json:"categoryId,omitempty"`
 	Referrer   string            `json:"referrer,omitempty"`
+	MIME       string            `json:"mime,omitempty"`
+	TotalBytes int64             `json:"totalBytes,omitempty"`
 	Headers    map[string]string `json:"headers,omitempty"`
 	Cookies    []model.Cookie    `json:"cookies,omitempty"`
 }
@@ -48,6 +54,7 @@ type Host struct {
 	Endpoint   func() (runtime.Endpoint, error)
 	Token      func() (string, error)
 	HTTPClient *http.Client
+	OpenUI     func(context.Context, uihandoff.Request) error
 }
 
 // New returns a Host wired to the real daemon discovery and token file.
@@ -73,6 +80,7 @@ func New(version string) *Host {
 			return token, nil
 		},
 		HTTPClient: &http.Client{Timeout: 15 * time.Second},
+		OpenUI:     openDesktopReview,
 	}
 }
 
@@ -82,10 +90,93 @@ func (h *Host) Handle(ctx context.Context, req Request) Response {
 	switch req.Command {
 	case "", "add":
 		return h.add(ctx, req)
+	case "open":
+		return h.open(ctx, req)
 	case "ping":
 		return h.ping(ctx)
 	default:
 		return failure("unknown command " + strconvQuote(req.Command))
+	}
+}
+
+func (h *Host) open(ctx context.Context, req Request) Response {
+	if err := validate(req); err != nil {
+		return failure(err.Error())
+	}
+	if _, err := h.Endpoint(); err != nil {
+		return failure("The dm daemon is not running. Start it with: systemctl --user start dm")
+	}
+	if _, err := h.Token(); err != nil {
+		return failure("The dm bearer token is missing. Start the daemon once so it can create it.")
+	}
+	if h.OpenUI == nil {
+		return failure("The DM desktop app cannot be opened.")
+	}
+
+	browserRequest := uihandoff.Request{
+		URL:        strings.TrimSpace(req.URL),
+		Filename:   strings.TrimSpace(req.Filename),
+		Referrer:   strings.TrimSpace(req.Referrer),
+		MIME:       strings.TrimSpace(req.MIME),
+		TotalBytes: req.TotalBytes,
+		Headers:    cleanHeaders(req.Headers),
+		Cookies:    cleanCookies(req.Cookies),
+	}
+	if err := h.OpenUI(ctx, browserRequest); err != nil {
+		return failure("Could not open the DM download review dialog: " + err.Error())
+	}
+	return Response{OK: true, Version: h.Version}
+}
+
+// openDesktopReview sends the request to the running desktop app. If the UI
+// isn't running, start the packaged executable and retry the local socket. The
+// payload is sent over a 0600 Unix socket, never in command-line arguments.
+func openDesktopReview(ctx context.Context, req uihandoff.Request) error {
+	err := uihandoff.Send(ctx, req)
+	if err == nil {
+		return nil
+	}
+	var rejected *uihandoff.ResponseError
+	if errors.As(err, &rejected) {
+		return err
+	}
+
+	executable, err := exec.LookPath("dm-desktop")
+	if err != nil {
+		return fmt.Errorf("dm-desktop was not found in PATH: %w", err)
+	}
+	cmd := exec.Command(executable)
+	cmd.Stdin = nil
+	cmd.Stdout = io.Discard
+	cmd.Stderr = io.Discard
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("start dm-desktop: %w", err)
+	}
+	go func() { _ = cmd.Wait() }()
+
+	deadline := time.NewTimer(8 * time.Second)
+	defer deadline.Stop()
+	ticker := time.NewTicker(100 * time.Millisecond)
+	defer ticker.Stop()
+	var lastErr error
+	for {
+		sendCtx, cancel := context.WithTimeout(ctx, 1200*time.Millisecond)
+		err := uihandoff.Send(sendCtx, req)
+		cancel()
+		if err == nil {
+			return nil
+		}
+		if errors.As(err, &rejected) {
+			return err
+		}
+		lastErr = err
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-deadline.C:
+			return fmt.Errorf("desktop app did not become ready: %w", lastErr)
+		case <-ticker.C:
+		}
 	}
 }
 
