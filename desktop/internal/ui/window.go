@@ -489,6 +489,7 @@ func (w *window) buildBanner() *gtk.Box {
 
 func (w *window) buildToast() *gtk.Box {
 	bar := gtk.NewBox(gtk.OrientationHorizontal, 10)
+	bar.AddCSSClass("dm-toast")
 	bar.SetMarginTop(6)
 	bar.SetMarginBottom(6)
 	bar.SetMarginStart(12)
