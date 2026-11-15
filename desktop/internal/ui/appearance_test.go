@@ -7,11 +7,11 @@ import (
 
 func TestResolvePalette(t *testing.T) {
 	cases := []struct {
-		name		string
-		prefs		clientPrefs
-		systemDark	bool
-		highContrast	bool
-		want		string
+		name         string
+		prefs        clientPrefs
+		systemDark   bool
+		highContrast bool
+		want         string
 	}{
 		{"system light", clientPrefs{Theme: themeSystem}, false, false, "light"},
 		{"system dark", clientPrefs{Theme: themeSystem}, true, false, "dark"},
