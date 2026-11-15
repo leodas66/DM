@@ -24,24 +24,24 @@ import (
 // download list. All GTK access happens on the main loop; network work runs in
 // goroutines and posts results back through glib.IdleAdd.
 type window struct {
-	app			*gtk.Application
+	app		*gtk.Application
 	version		string
-	prefs			clientPrefs
-	prefsPath		string
+	prefs		clientPrefs
+	prefsPath	string
 	prefsWarning	string
-	css			*gtk.CSSProvider
-	themeButton		*gtk.Button
+	css		*gtk.CSSProvider
+	themeButton	*gtk.Button
 	sidebar		*gtk.Box
-	brandText		*gtk.Box
-	navHeading		*gtk.Label
+	brandText	*gtk.Box
+	navHeading	*gtk.Label
 	categoryHeader	*gtk.Box
-	networkCard		*gtk.Box
-	body			*gtk.Box
-	layoutSet		bool
+	networkCard	*gtk.Box
+	body		*gtk.Box
+	layoutSet	bool
 	isRail		bool
-	layoutWide		bool
-	connectFn		func() (*dmapi.Client, error)
-	win			*gtk.ApplicationWindow
+	layoutWide	bool
+	connectFn	func() (*dmapi.Client, error)
+	win		*gtk.ApplicationWindow
 	ctx    context.Context
 	cancel context.CancelFunc
 
