@@ -46,14 +46,14 @@ type window struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 
-	store                *viewStore
-	filter               filter
-	client               *dmapi.Client
-	loaded               bool
-	categories           []model.Category
-	defaultDir           string
-	settings             dmapi.Settings
-	sortMode             sortMode
+	store      *viewStore
+	filter     filter
+	client     *dmapi.Client
+	loaded     bool
+	categories []model.Category
+	defaultDir string
+	settings   dmapi.Settings
+	sortMode   sortMode
 
 	sortDrop *gtk.DropDown
 
@@ -1134,6 +1134,7 @@ func (w *window) syncSelection() {
 // sidebarBreakpoint is the width below which the full sidebar collapses
 // to an icon rail. All navigation destinations remain reachable.
 const sidebarBreakpoint = 900
+
 // Keep the full inspector beside the list only when the table can retain its
 // comfortable minimum width. At ordinary laptop widths it becomes a sheet.
 const inspectorBreakpoint = 1440
