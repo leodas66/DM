@@ -95,6 +95,14 @@ type window struct {
 	stack           *gtk.Stack
 	model           *gtk.StringList
 	listView        *gtk.ListView
+	tableHeader     *gtk.Box
+	sizeHeader      *gtk.Label
+	speedHeader     *gtk.Label
+	etaHeader       *gtk.Label
+	columnsSet      bool
+	showSizeColumn  bool
+	showSpeedColumn bool
+	showETAColumn   bool
 	loadingSpinner  *gtk.Spinner
 	offlineDetail   *gtk.Label
 	emptyTitle      *gtk.Label
@@ -613,6 +621,7 @@ func (w *window) buildStack() *gtk.Stack {
 			return
 		}
 		r.setDownload(d, w.store.rate(id))
+		r.setColumns(w.showSizeColumn, w.showSpeedColumn, w.showETAColumn)
 		w.visibleRows[id] = r
 	})
 	factory.ConnectUnbind(func(obj *coreglib.Object) {
@@ -628,14 +637,36 @@ func (w *window) buildStack() *gtk.Stack {
 	})
 
 	w.listView = gtk.NewListView(selection, &factory.ListItemFactory)
-	w.listView.SetShowSeparators(true)
+	w.listView.SetShowSeparators(false)
+
+	w.tableHeader = gtk.NewBox(gtk.OrientationHorizontal, 8)
+	w.tableHeader.AddCSSClass("dm-table-header")
+	w.tableHeader.SetMarginTop(8)
+	w.tableHeader.SetMarginBottom(6)
+	w.tableHeader.SetMarginStart(12)
+	w.tableHeader.SetMarginEnd(12)
+	w.tableHeader.Append(tableHeaderLabel("Name", 170, true))
+	w.tableHeader.Append(tableHeaderLabel("Progress", 125, false))
+	w.sizeHeader = tableHeaderLabel("Size", 58, false)
+	w.tableHeader.Append(w.sizeHeader)
+	w.speedHeader = tableHeaderLabel("Speed", 66, false)
+	w.tableHeader.Append(w.speedHeader)
+	w.etaHeader = tableHeaderLabel("Left", 55, false)
+	w.tableHeader.Append(w.etaHeader)
+	w.tableHeader.Append(tableHeaderLabel("Actions", 62, false))
 
 	scroller := gtk.NewScrolledWindow()
 	scroller.SetPolicy(gtk.PolicyNever, gtk.PolicyAutomatic)
 	scroller.SetHExpand(true)
 	scroller.SetVExpand(true)
 	scroller.SetChild(w.listView)
-	w.stack.AddNamed(scroller, "list")
+
+	listPage := gtk.NewBox(gtk.OrientationVertical, 0)
+	listPage.SetHExpand(true)
+	listPage.SetVExpand(true)
+	listPage.Append(w.tableHeader)
+	listPage.Append(scroller)
+	w.stack.AddNamed(listPage, "list")
 
 	w.stack.SetVisibleChildName("loading")
 	return w.stack
@@ -1103,6 +1134,27 @@ func (w *window) adaptSidebar() {
 
 	rail := width < sidebarBreakpoint
 	wide := width >= inspectorBreakpoint
+	showSize := width >= 900
+	showSpeed := width >= 1024
+	showETA := width >= 1180
+	if !w.columnsSet || showSize != w.showSizeColumn || showSpeed != w.showSpeedColumn || showETA != w.showETAColumn {
+		w.showSizeColumn = showSize
+		w.showSpeedColumn = showSpeed
+		w.showETAColumn = showETA
+		if w.sizeHeader != nil {
+			w.sizeHeader.SetVisible(showSize)
+		}
+		if w.speedHeader != nil {
+			w.speedHeader.SetVisible(showSpeed)
+		}
+		if w.etaHeader != nil {
+			w.etaHeader.SetVisible(showETA)
+		}
+		for _, visibleRow := range w.visibleRows {
+			visibleRow.setColumns(showSize, showSpeed, showETA)
+		}
+		w.columnsSet = true
+	}
 	if !w.layoutSet || rail != w.isRail {
 		if w.sidebar != nil {
 			if rail {
