@@ -121,16 +121,26 @@ func (w *window) showDetails(id string) {
 	if _, ok := w.store.get(id); !ok {
 		return
 	}
+	if previous, ok := w.visibleRows[w.selectedID]; ok {
+		previous.setSelected(false)
+	}
 	w.selectedID = id
+	if selected, ok := w.visibleRows[id]; ok {
+		selected.setSelected(true)
+	}
 	w.inspectorRevealer.SetRevealChild(true)
 	w.refreshInspector()
 }
 
 func (w *window) hideDetails() {
+	if previous, ok := w.visibleRows[w.selectedID]; ok {
+		previous.setSelected(false)
+	}
 	w.selectedID = ""
 	w.refreshInspector()
-	width, _ := w.win.ObjectProperty("default-width").(int)
-	w.inspectorRevealer.SetRevealChild(width >= 1180)
+	// On wide screens the inspector remains as an empty-state panel. On
+	// narrower screens it closes back into the list.
+	w.inspectorRevealer.SetRevealChild(w.layoutWide)
 }
 
 func (w *window) inspectorPrimaryAction() {
