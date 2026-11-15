@@ -31,6 +31,7 @@ const (
 
 func (w *window) buildToolbar() *gtk.Box {
 	bar := gtk.NewBox(gtk.OrientationHorizontal, 6)
+	bar.AddCSSClass("dm-toolbar")
 	bar.SetMarginTop(8)
 	bar.SetMarginBottom(8)
 	bar.SetMarginStart(12)
