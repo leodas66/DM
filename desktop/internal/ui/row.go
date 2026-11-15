@@ -29,10 +29,10 @@ type row struct {
 	popover   *gtk.Popover
 
 	detailsItem *gtk.Button
-	cancelItem *gtk.Button
-	openItem   *gtk.Button
-	removeItem *gtk.Button
-	deleteItem *gtk.Button
+	cancelItem  *gtk.Button
+	openItem    *gtk.Button
+	removeItem  *gtk.Button
+	deleteItem  *gtk.Button
 
 	id             string
 	lastAccessible string
