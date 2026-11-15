@@ -23,8 +23,9 @@ The PKGBUILD downloads the prebuilt daemon, Native Messaging host and GTK4
 desktop client from the latest `continuous` GitHub prerelease for your
 architecture. It verifies the bundle against the release's `SHA256SUMS` file
 and installs the binaries plus the systemd unit, desktop entry, icon and
-Firefox Native Messaging manifest. A local Go/GTK development toolchain is
-not needed to install the package.
+Firefox Native Messaging manifest. The package version follows the current
+main commit, and the downloaded bundle must match that commit's short SHA.
+A local Go/GTK development toolchain is not needed to install the package.
 
 This installs:
 
