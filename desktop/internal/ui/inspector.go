@@ -153,7 +153,7 @@ func (w *window) refreshInspector() {
 	w.inspectorStatus.SetLabel(text.Status)
 	downloaded := dmapi.Downloaded(d)
 	if d.Size > 0 {
-		fraction := float64(downloaded)/float64(d.Size)
+		fraction := float64(downloaded) / float64(d.Size)
 		if fraction > 1 {
 			fraction = 1
 		}
