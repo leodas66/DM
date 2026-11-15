@@ -69,9 +69,11 @@ func (w *window) loadClientPrefs() {
 	}
 	w.prefsPath = path
 	prefs, err := loadClientPrefs(path)
-	if err == nil {
-		w.prefs = prefs
+	if err != nil {
+		w.prefsWarning = err.Error()
+		return
 	}
+	w.prefs = prefs
 }
 
 func (w *window) systemAppearance() (dark, highContrast bool) {
