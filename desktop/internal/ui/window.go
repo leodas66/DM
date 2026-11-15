@@ -54,7 +54,9 @@ type window struct {
 	defaultDir           string
 	settings             dmapi.Settings
 	sortMode             sortMode
-	sortDrop             *gtk.DropDown
+
+	sortDrop *gtk.DropDown
+
 	searchEntry          *gtk.Entry
 	pauseAllButton       *gtk.Button
 	resumeAllButton      *gtk.Button
