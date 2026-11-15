@@ -61,6 +61,10 @@ The navigation area exposes the useful lifecycle filters: All, Active, Queued, P
 
 The main area uses a virtualized GTK list view for the dynamic download collection. Do not use a grid of oversized cards for ordinary downloads.
 
+The header provides a labelled search entry that matches filenames, source URLs and destination paths. A compact toolbar offers Pause all, Resume all, Clear completed and sorting by date added, name, file size or progress. Clearing completed removes history records only; it never deletes the downloaded files.
+
+An on-demand details pane may appear beside the list when the user chooses **Show details** from a row menu. It is hidden by default, keeps the list as the primary surface and reports only daemon-backed values (status, bytes, rate, ETA, source, destination and actual segment count). It must not fabricate segment ownership or progress.
+
 The first layout target is a desktop window at 1024×600. As width decreases, collapse or replace the sidebar with a compact native navigation control; keep the download list usable and retain all actions. Avoid permanently visible multi-pane inspectors.
 
 ## 4. Download list and row contract

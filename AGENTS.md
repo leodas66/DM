@@ -22,8 +22,7 @@ non-obvious call already made — check it before re-litigating a choice.
 - `make check` is the only accepted evidence a phase is green: gofmt, `go vet
   ./...`, `go test -race ./...`, `go build ./...`. Paste its real output.
   Desktop-client changes also need `make check-desktop` (same gate inside the
-  separate `desktop/` module); it needs the GTK4 development headers, which CI
-  does not install yet.
+  separate `desktop/` module); the GTK4 CI job installs the required headers.
 - Commit per green phase: `phase N: <what changed>`. Pre-commit runs the same
   gate — enable once per clone with `make hooks`. Never `--no-verify`.
 - Stop only for: a new dependency, the license, destructive actions, and the
@@ -81,7 +80,7 @@ non-obvious call already made — check it before re-litigating a choice.
 Messaging host.
 Core packages live in `internal/{model,probe,download,manager,store,api}` plus
 `internal/runtime` (daemon endpoint discovery for local clients), with
-`internal/app` still to come. `desktop/` is an isolated Go module for the GTK4
+`internal/app` providing the download, category, settings and lifecycle services. `desktop/` is an isolated Go module for the GTK4
 client (gotk4); it talks to the daemon over REST/WebSocket and must not be
 imported by the daemon module. `extension/` is a TypeScript MV3 extension using
 Native Messaging. The transitional `ui/`, `internal/web` and

@@ -1,53 +1,58 @@
 # Maintainer: Agent V <agent-v@kilo.local>
 pkgname=dm
-pkgver=0.2.1
+pkgver=0.2.1.r1.g0000000
 pkgrel=1
 pkgdesc="Lightweight segmented download manager: local daemon, GTK4 client and browser host"
 arch=('x86_64' 'aarch64')
 url="https://github.com/leodas66/DM"
 license=('MIT')
 depends=('glibc' 'gtk4')
-makedepends=('go' 'gtk4' 'git')
-source=("dm::git+https://github.com/leodas66/DM.git#tag=v${pkgver}")
+makedepends=('git' 'curl')
+source=("dm::git+https://github.com/leodas66/DM.git#branch=main")
 sha256sums=('SKIP')
 
-build() {
-  cd dm
+pkgver() {
+  cd "${srcdir}/dm"
+  local version commit_epoch short_sha
+  version="$(cat VERSION)"
+  commit_epoch="$(git log -1 --format=%ct)"
+  short_sha="$(git rev-parse --short=7 HEAD)"
+  [[ "$version" && "$commit_epoch" =~ ^[0-9]+$ && "$short_sha" =~ ^[0-9a-f]{7,}$ ]] || return 1
+  printf '%s.r%s.g%s' "$version" "$commit_epoch" "$short_sha"
+}
 
-  # The daemon is a pure-Go binary; the client needs cgo for GTK4.
-  export CGO_ENABLED=1
-  export GOFLAGS="-trimpath"
-  # Fail fast when the installed Go is older than go.mod requires. With the
-  # default GOTOOLCHAIN=auto, Go downloads a toolchain through the module proxy,
-  # which prints nothing and looks exactly like a hung build.
-  export GOTOOLCHAIN=local
+prepare() {
+  cd "${srcdir}/dm"
+  local asset expected bundled_sha commit_sha bundled_epoch commit_epoch
+  asset="dm-linux-${CARCH}.tar.gz"
+  commit_sha="$(git rev-parse --short=7 HEAD)"
+  commit_epoch="$(git log -1 --format=%ct)"
 
-  msg2 "building dm (daemon and CLI)"
-  go build -o dm ./cmd/dm
-  msg2 "building dm-native-host"
-  go build -o dm-native-host ./cmd/dm-native-host
-  msg2 "building dm-desktop; the first GTK4 build compiles the bindings and can take several minutes"
-  (cd desktop && go build -o dm-desktop .)
+  # Fetch the rolling assets on every source refresh instead of letting
+  # makepkg's SRCDEST cache an old archive under a permanent filename.
+  curl -fsSL "https://github.com/leodas66/DM/releases/download/continuous/$asset" \
+    -o "${srcdir}/$asset"
+  curl -fsSL "https://github.com/leodas66/DM/releases/download/continuous/SHA256SUMS" \
+    -o "${srcdir}/SHA256SUMS"
+
+  expected="$(awk -v asset="$asset" '$2 == asset {print $1}' "${srcdir}/SHA256SUMS")"
+  [[ "$expected" =~ ^[[:xdigit:]]{64}$ ]] || {
+    error "No valid checksum found for $asset in SHA256SUMS"
+    return 1
+  }
+  printf '%s  %s\n' "$expected" "${srcdir}/$asset" | sha256sum --check --status || {
+    error "Checksum mismatch for $asset"
+    return 1
+  }
+
+  bundled_sha="$(tar -xOzf "${srcdir}/$asset" BUILD_INFO | awk -F= '$1 == "SHORT_SHA" {print $2}')"
+  bundled_epoch="$(tar -xOzf "${srcdir}/$asset" BUILD_INFO | awk -F= '$1 == "COMMIT_EPOCH" {print $2}')"
+  [[ "$bundled_sha" == "$commit_sha" && "$bundled_epoch" == "$commit_epoch" ]] || {
+    error "The continuous release does not match the latest main commit yet; retry after its build completes."
+    return 1
+  }
 }
 
 package() {
-  cd dm
-
-  install -Dm755 dm "$pkgdir/usr/bin/dm"
-  install -Dm755 dm-native-host "$pkgdir/usr/bin/dm-native-host"
-  install -Dm755 desktop/dm-desktop "$pkgdir/usr/bin/dm-desktop"
-
-  install -Dm644 dm.service "$pkgdir/usr/lib/systemd/user/dm.service"
-  install -Dm644 packaging/io.github.vishwa.DM.desktop \
-    "$pkgdir/usr/share/applications/io.github.vishwa.DM.desktop"
-  install -Dm644 packaging/io.github.vishwa.DM.svg \
-    "$pkgdir/usr/share/icons/hicolor/scalable/apps/io.github.vishwa.DM.svg"
-
-  # Firefox picks up a system-wide Native Messaging manifest. Chrome needs the
-  # extension ID, which is unknown until the extension is installed, so that
-  # manifest is written per user (see README.md).
-  install -Dm644 packaging/io.github.vishwa.dm.firefox.json \
-    "$pkgdir/usr/lib/mozilla/native-messaging-hosts/io.github.vishwa.dm.json"
-
-  install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+  tar -xzf "${srcdir}/dm-linux-${CARCH}.tar.gz" -C "$pkgdir" usr
 }
