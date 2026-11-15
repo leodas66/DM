@@ -46,14 +46,17 @@ type window struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 
-	store                *viewStore
-	filter               filter
-	client               *dmapi.Client
-	loaded               bool
-	categories           []model.Category
-	defaultDir           string
-	settings             dmapi.Settings
-	sortMode             sortMode
+	store      *viewStore
+	filter     filter
+	client     *dmapi.Client
+	loaded     bool
+	categories []model.Category
+	defaultDir string
+	settings   dmapi.Settings
+	sortMode   sortMode
+
+	sortDrop *gtk.DropDown
+
 	searchEntry          *gtk.Entry
 	pauseAllButton       *gtk.Button
 	resumeAllButton      *gtk.Button
@@ -622,6 +625,7 @@ func (w *window) buildStack() *gtk.Stack {
 		}
 		r.setDownload(d, w.store.rate(id))
 		r.setColumns(w.showSizeColumn, w.showSpeedColumn, w.showETAColumn)
+		r.setSelected(w.selectedID == id)
 		w.visibleRows[id] = r
 	})
 	factory.ConnectUnbind(func(obj *coreglib.Object) {
@@ -639,21 +643,21 @@ func (w *window) buildStack() *gtk.Stack {
 	w.listView = gtk.NewListView(selection, &factory.ListItemFactory)
 	w.listView.SetShowSeparators(false)
 
-	w.tableHeader = gtk.NewBox(gtk.OrientationHorizontal, 8)
+	w.tableHeader = gtk.NewBox(gtk.OrientationHorizontal, 14)
 	w.tableHeader.AddCSSClass("dm-table-header")
 	w.tableHeader.SetMarginTop(8)
 	w.tableHeader.SetMarginBottom(6)
 	w.tableHeader.SetMarginStart(12)
 	w.tableHeader.SetMarginEnd(12)
-	w.tableHeader.Append(tableHeaderLabel("Name", 170, true))
-	w.tableHeader.Append(tableHeaderLabel("Progress", 125, false))
-	w.sizeHeader = tableHeaderLabel("Size", 58, false)
+	w.tableHeader.Append(tableHeaderLabel("Name", 220, true))
+	w.tableHeader.Append(tableHeaderLabel("Progress", 150, false))
+	w.sizeHeader = tableHeaderLabel("Size", 92, false)
 	w.tableHeader.Append(w.sizeHeader)
-	w.speedHeader = tableHeaderLabel("Speed", 66, false)
+	w.speedHeader = tableHeaderLabel("Speed", 100, false)
 	w.tableHeader.Append(w.speedHeader)
-	w.etaHeader = tableHeaderLabel("Left", 55, false)
+	w.etaHeader = tableHeaderLabel("Left", 84, false)
 	w.tableHeader.Append(w.etaHeader)
-	w.tableHeader.Append(tableHeaderLabel("Actions", 62, false))
+	w.tableHeader.Append(tableHeaderLabel("Actions", 84, false))
 
 	scroller := gtk.NewScrolledWindow()
 	scroller.SetPolicy(gtk.PolicyNever, gtk.PolicyAutomatic)
@@ -961,6 +965,18 @@ func (w *window) flushRows() {
 
 func (w *window) rebuild() {
 	ids := w.visibleIDs()
+	if w.selectedID != "" {
+		visible := false
+		for _, id := range ids {
+			if id == w.selectedID {
+				visible = true
+				break
+			}
+		}
+		if !visible {
+			w.hideDetails()
+		}
+	}
 	w.model.Splice(0, w.model.NItems(), ids)
 
 	w.updateCounts()
@@ -1118,7 +1134,10 @@ func (w *window) syncSelection() {
 // sidebarBreakpoint is the width below which the full sidebar collapses
 // to an icon rail. All navigation destinations remain reachable.
 const sidebarBreakpoint = 900
-const inspectorBreakpoint = 1180
+
+// Keep the full inspector beside the list only when the table can retain its
+// comfortable minimum width. At ordinary laptop widths it becomes a sheet.
+const inspectorBreakpoint = 1440
 
 // adaptSidebar responds to the allocated window width. It is called on initial
 // presentation and from a small main-loop poll because default-width is only
@@ -1135,8 +1154,8 @@ func (w *window) adaptSidebar() {
 	rail := width < sidebarBreakpoint
 	wide := width >= inspectorBreakpoint
 	showSize := width >= 900
-	showSpeed := width >= 1024
-	showETA := width >= 1180
+	showSpeed := width >= 1100 || (width >= 760 && width < 900)
+	showETA := width >= 1100
 	if !w.columnsSet || showSize != w.showSizeColumn || showSpeed != w.showSpeedColumn || showETA != w.showETAColumn {
 		w.showSizeColumn = showSize
 		w.showSpeedColumn = showSpeed

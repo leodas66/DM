@@ -5,8 +5,6 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/diamondburned/gotk4/pkg/gio/v2"
-	"github.com/diamondburned/gotk4/pkg/glib/v2"
 	"github.com/diamondburned/gotk4/pkg/gtk/v4"
 	"github.com/vishwa/dm/desktop/internal/dmapi"
 	"github.com/vishwa/dm/internal/model"
@@ -56,74 +54,85 @@ func (w *window) buildToolbar() *gtk.Box {
 	spacer.SetHExpand(true)
 	bar.Append(spacer)
 
-	bar.Append(newDimLabel("Sort"))
-	sortMenu := gio.NewMenu()
-	sortMenu.Append("Date added", "win.sort-newest")
-	sortMenu.Append("Name", "win.sort-name")
-	sortMenu.Append("File size", "win.sort-size")
-	sortMenu.Append("Progress", "win.sort-progress")
-	w.addSortAction("sort-newest", sortNewest)
-	w.addSortAction("sort-name", sortName)
-	w.addSortAction("sort-size", sortSize)
-	w.addSortAction("sort-progress", sortProgress)
-
-	sortButton := gtk.NewMenuButton()
-	sortButton.SetIconName("view-sort-ascending-symbolic")
-	sortButton.SetHasFrame(false)
-	sortButton.SetTooltipText("Sort downloads")
-	setAccessibleLabel(sortButton.Accessible, "Sort downloads")
-	sortButton.SetMenuModel(sortMenu)
-	bar.Append(sortButton)
-	return bar
-}
-
-func (w *window) addSortAction(name string, mode sortMode) {
-	action := gio.NewSimpleAction(name, nil)
-	action.ConnectActivate(func(*glib.Variant) {
-		w.sortMode = mode
+	bar.Append(newDimLabel("Sort by"))
+	w.sortDrop = gtk.NewDropDownFromStrings([]string{"Date added", "Name", "File size", "Progress"})
+	w.sortDrop.SetSelected(uint(w.sortMode))
+	w.sortDrop.SetSizeRequest(150, -1)
+	w.sortDrop.SetTooltipText("Choose how downloads are ordered")
+	setAccessibleLabel(w.sortDrop.Accessible, "Sort downloads")
+	w.sortDrop.NotifyProperty("selected", func() {
+		w.sortMode = sortMode(w.sortDrop.Selected())
 		w.rebuild()
 	})
-	w.win.AddAction(action)
+	bar.Append(w.sortDrop)
+	return bar
 }
 
 func (w *window) visibleIDs() []string {
 	ids := w.store.ids(w.filter)
-	query := strings.ToLower(strings.TrimSpace(w.searchEntry.Text()))
-	if query != "" {
+	query := w.searchEntry.Text()
+	if strings.TrimSpace(query) != "" {
 		filtered := ids[:0]
 		for _, id := range ids {
 			d, ok := w.store.get(id)
-			if !ok {
-				continue
-			}
-			haystack := strings.ToLower(strings.Join([]string{d.Filename, d.URL, d.FinalURL, d.Dir}, " "))
-			if strings.Contains(haystack, query) {
+			if ok && matchesDownloadQuery(d, query) {
 				filtered = append(filtered, id)
 			}
 		}
 		ids = filtered
 	}
+	return sortDownloadIDs(w.store, ids, w.sortMode)
+}
+
+// matchesDownloadQuery searches the filename, original/final source URL and
+// destination. It is deliberately local: the daemon remains the owner of data.
+func matchesDownloadQuery(d model.Download, query string) bool {
+	query = strings.ToLower(strings.TrimSpace(query))
+	if query == "" {
+		return true
+	}
+	haystack := strings.ToLower(strings.Join([]string{d.Filename, d.URL, d.FinalURL, d.Dir}, " "))
+	return strings.Contains(haystack, query)
+}
+
+// sortDownloadIDs sorts a view's IDs without changing the daemon-backed store.
+func sortDownloadIDs(store *viewStore, ids []string, mode sortMode) []string {
 	sort.SliceStable(ids, func(i, j int) bool {
-		a, _ := w.store.get(ids[i])
-		b, _ := w.store.get(ids[j])
-		switch w.sortMode {
-		case sortName:
-			return strings.ToLower(a.Filename) < strings.ToLower(b.Filename)
-		case sortSize:
-			return a.Size > b.Size
-		case sortProgress:
-			if a.Size <= 0 || b.Size <= 0 {
-				if a.Size <= 0 && b.Size <= 0 {
-					return a.CreatedAt.After(b.CreatedAt)
-				}
-				return a.Size > 0
-			}
-			return float64(dmapi.Downloaded(a))/float64(a.Size) > float64(dmapi.Downloaded(b))/float64(b.Size)
-		default:
+		a, _ := store.get(ids[i])
+		b, _ := store.get(ids[j])
+		newerFirst := func() bool {
 			if !a.CreatedAt.Equal(b.CreatedAt) {
 				return a.CreatedAt.After(b.CreatedAt)
 			}
 			return a.ID < b.ID
+		}
+		switch mode {
+		case sortName:
+			an, bn := strings.ToLower(a.Filename), strings.ToLower(b.Filename)
+			if an != bn {
+				return an < bn
+			}
+			return newerFirst()
+		case sortSize:
+			if a.Size != b.Size {
+				return a.Size > b.Size
+			}
+			return newerFirst()
+		case sortProgress:
+			if a.Size <= 0 || b.Size <= 0 {
+				if a.Size > 0 || b.Size > 0 {
+					return a.Size > 0
+				}
+				return newerFirst()
+			}
+			ap := float64(dmapi.Downloaded(a)) / float64(a.Size)
+			bp := float64(dmapi.Downloaded(b)) / float64(b.Size)
+			if ap != bp {
+				return ap > bp
+			}
+			return newerFirst()
+		default:
+			return newerFirst()
 		}
 	})
 	return ids

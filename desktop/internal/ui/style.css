@@ -141,46 +141,49 @@ window.dm-root .dm-table-header {
 
 window.dm-root .dm-table-heading {
   color: @dm_subtle;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.7px;
 }
 
 window.dm-root .dm-download-row {
-  min-height: 64px;
-  padding-top: 4px;
-  padding-bottom: 4px;
+  min-height: 72px;
+  padding-top: 8px;
+  padding-bottom: 8px;
 }
 
 window.dm-root .dm-file-icon {
   color: @dm_muted;
+  background-color: @dm_surface2;
+  border-radius: 9px;
+  padding: 7px;
 }
 
 window.dm-root .dm-file-name {
   color: @dm_text;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 650;
 }
 
 window.dm-root .dm-file-context {
   color: @dm_subtle;
-  font-size: 11px;
+  font-size: 12px;
 }
 
 window.dm-root .dm-progress-status {
   color: @dm_text;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 650;
 }
 
 window.dm-root .dm-progress-bytes {
   color: @dm_subtle;
-  font-size: 10px;
+  font-size: 11px;
 }
 
 window.dm-root .dm-table-value {
   color: @dm_muted;
-  font-size: 11px;
+  font-size: 13px;
   font-variant-numeric: tabular-nums;
 }
 
@@ -203,6 +206,16 @@ window.dm-root .dm-download-row {
 
 window.dm-root .dm-download-row:hover {
   background-color: @dm_hover;
+}
+
+window.dm-root .dm-download-row.selected {
+  background-color: @dm_selected;
+  border-left: 3px solid @dm_accent;
+}
+
+window.dm-root .dm-download-row:focus {
+  outline: 2px solid @dm_accent;
+  outline-offset: -2px;
 }
 
 window.dm-root progressbar trough {
@@ -296,6 +309,7 @@ window.dm-root .dm-inspector-sheet {
 }
 
 window.dm-root.dm-compact .dm-download-row {
-  padding-top: 3px;
-  padding-bottom: 3px;
+  min-height: 56px;
+  padding-top: 4px;
+  padding-bottom: 4px;
 }
