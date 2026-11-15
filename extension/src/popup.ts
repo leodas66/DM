@@ -37,7 +37,7 @@ form.addEventListener('submit', async (e) => {
   sendBtn.disabled = false
 
   if (response.ok) {
-    setStatus('Download added to DM.', true)
+    setStatus('Review the source and destination in the DM desktop window.', true)
     urlInput.value = ''
     return
   }
