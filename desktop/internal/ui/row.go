@@ -199,6 +199,13 @@ func newMenuItem(text string) *gtk.Button {
 // setDownload renders d and the sampled transfer rate.
 func (r *row) setDownload(d model.Download, bytesPerSecond float64) {
 	r.id = d.ID
+	if r.w.prefs.Density == densityCompact {
+		r.root.SetMarginTop(3)
+		r.root.SetMarginBottom(3)
+	} else {
+		r.root.SetMarginTop(8)
+		r.root.SetMarginBottom(8)
+	}
 	text := describe(d, bytesPerSecond)
 
 	r.fileIcon.SetFromIconName(fileIcon(text.Title))
