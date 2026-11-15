@@ -8,8 +8,12 @@ url="https://github.com/leodas66/DM"
 license=('MIT')
 depends=('glibc' 'gtk4')
 makedepends=('git' 'curl')
-source=("dm::git+https://github.com/leodas66/DM.git#branch=main")
-sha256sums=('SKIP')
+
+# makepkg's built-in VCS fetch is intentionally quiet. Fetch the repository
+# ourselves in prepare() with --progress so users can see network activity.
+# The persistent mirror lives in SRCDEST and is reused on subsequent builds.
+source=()
+sha256sums=()
 
 pkgver() {
   cd "${srcdir}/dm"
@@ -22,6 +26,36 @@ pkgver() {
 }
 
 prepare() {
+  local upstream_url="https://github.com/leodas66/DM.git"
+  local source_root="${SRCDEST:-$startdir}"
+  local git_cache="${source_root}/dm"
+
+  mkdir -p "$source_root"
+
+  # Reuse makepkg's previous bare VCS cache when one exists. If the path is
+  # occupied by a non-bare directory, use a separate cache rather than
+  # deleting or modifying the user's directory.
+  if [[ -e "$git_cache" ]] && ! git -C "$git_cache" rev-parse --is-bare-repository 2>/dev/null | grep -qx true; then
+    git_cache="${source_root}/dm-source.git"
+  fi
+
+  if [[ -d "$git_cache" ]]; then
+    if ! git -C "$git_cache" rev-parse --is-bare-repository 2>/dev/null | grep -qx true; then
+      error "The cached source path is not a valid bare Git repository: $git_cache"
+      return 1
+    fi
+    msg2 "Updating DM source repository (Git progress enabled)..."
+    git -C "$git_cache" fetch --progress --all --prune
+  else
+    msg2 "Cloning DM source repository (Git progress enabled)..."
+    git clone --mirror --progress "$upstream_url" "$git_cache"
+  fi
+
+  rm -rf "${srcdir}/dm"
+  msg2 "Creating the working tree..."
+  git clone --no-checkout "$git_cache" "${srcdir}/dm"
+  git -C "${srcdir}/dm" checkout --force -B makepkg refs/remotes/origin/main
+
   cd "${srcdir}/dm"
   local asset expected bundled_sha commit_sha bundled_epoch commit_epoch
   asset="dm-linux-${CARCH}.tar.gz"
@@ -30,8 +64,6 @@ prepare() {
 
   # Fetch the rolling assets on every source refresh instead of letting
   # makepkg's SRCDEST cache an old archive under a permanent filename.
-  # Keep curl's progress visible: makepkg otherwise looks frozen while the
-  # silent download runs inside prepare().
   msg2 "Downloading the $CARCH release bundle ($asset)..."
   curl --fail --location --show-error --progress-bar \
     --retry 3 --retry-delay 2 --retry-all-errors \
