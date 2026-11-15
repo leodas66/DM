@@ -101,10 +101,12 @@ test('buildDownloadPayload carries the referrer and the file name', () => {
     [{ name: 'session', value: 'abc' }],
   )
 
-  assert.equal(payload.command, 'add')
+  assert.equal(payload.command, 'open')
   assert.equal(payload.url, 'https://example.com/file.iso')
   assert.equal(payload.referrer, 'https://example.com/page')
   assert.equal(payload.filename, 'file.iso')
+  assert.equal(payload.mime, 'application/octet-stream')
+  assert.equal(payload.totalBytes, 0)
   assert.equal(payload.headers['Referer'], 'https://example.com/page')
   assert.equal(payload.headers['User-Agent'], 'dm/0.2.1')
   assert.deepEqual(payload.cookies, [{ name: 'session', value: 'abc' }])
