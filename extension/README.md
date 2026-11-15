@@ -135,9 +135,10 @@ cookies and headers are not put in command-line arguments or temporary files.
 
 ## Security notes
 
-- The extension cannot reach the daemon directly: it has no token. The native
-  host supports a review-only `open` command and a health-check `ping`; the
-  user confirms the download in the desktop app before it is submitted.
+- The extension cannot reach the daemon directly: it has no token. It uses the
+  review-only `open` and health-check `ping` commands; the host retains a legacy
+  direct-add command for trusted local clients. The user confirms in the desktop
+  app before the extension's browser-captured request is submitted.
 - The browser request is passed to the desktop over a per-user Unix socket with
   mode 0600 in a 0700 runtime directory. The socket is removed on clean exit.
 - The host refuses anything but `http://` and `https://` URLs, so the browser
