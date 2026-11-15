@@ -47,7 +47,7 @@ It must not contain use-case orchestration or directly manipulate persistence.
 
 ### Application services
 
-Add `internal/app` as the use-case boundary between API and Manager.
+Implemented in `internal/app` and merged in PR #1. This package is the use-case boundary between API and Manager.
 
 - `DownloadService`: add/list/get/pause/resume/cancel/remove downloads.
 - `QueueService`: categories, queue operations and scheduling.
@@ -146,5 +146,8 @@ management, retry for failed or canceled downloads, and clipboard pre-fill.
 Step 6 ships daemon, host, and client in one package. Step 7 deleted the
 Svelte and Wails trees, the embedded web server, and the Wails dependency.
 
-Step 1 (`internal/app` services) is the only open item. It has no user-visible
-effect and was deferred by the author for 0.2.0.
+The application-service layer was merged in PR #1. It provides the
+use-case boundary between the HTTP API and Manager; the Manager remains the
+single owner of download state and the only SQLite writer. The GTK client
+refinement and automated binary release pipeline are maintained as separate
+workstreams.
