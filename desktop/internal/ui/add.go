@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"fmt"
 	"net/url"
 	"strings"
 
@@ -8,6 +9,9 @@ import (
 	"github.com/diamondburned/gotk4/pkg/gio/v2"
 	"github.com/diamondburned/gotk4/pkg/gtk/v4"
 	"github.com/vishwa/dm/desktop/internal/dmapi"
+	"github.com/vishwa/dm/desktop/internal/format"
+	"github.com/vishwa/dm/internal/model"
+	"github.com/vishwa/dm/internal/uihandoff"
 )
 
 // addDialog is the focused Add Download surface: a URL first, with destination
@@ -25,8 +29,14 @@ type addDialog struct {
 	formErrorBox   *gtk.Box
 	formErrorLabel *gtk.Label
 
-	addButton  *gtk.Button
-	urlHint    *gtk.Label
+	addButton *gtk.Button
+	urlHint   *gtk.Label
+
+	sourceBox     *gtk.Box
+	sourceDetails *gtk.Label
+	sourcePage    *gtk.Label
+	pending       *uihandoff.Request
+
 	submitting bool
 	prefilling bool
 }
@@ -73,6 +83,19 @@ func newAddDialog(w *window) *addDialog {
 
 	d.urlErrorBox, d.urlErrorLabel = errorRow()
 	content.Append(d.urlErrorBox)
+
+	d.sourceBox = gtk.NewBox(gtk.OrientationVertical, 4)
+	d.sourceBox.SetVisible(false)
+	d.sourceBox.Append(sectionHeading("Browser source"))
+	d.sourceDetails = newDimLabel("")
+	d.sourceDetails.SetWrap(true)
+	d.sourceDetails.SetSelectable(true)
+	d.sourceBox.Append(d.sourceDetails)
+	d.sourcePage = newDimLabel("")
+	d.sourcePage.SetWrap(true)
+	d.sourcePage.SetSelectable(true)
+	d.sourceBox.Append(d.sourcePage)
+	content.Append(d.sourceBox)
 
 	content.Append(gtk.NewSeparator(gtk.OrientationHorizontal))
 
@@ -153,9 +176,67 @@ func errorRow() (*gtk.Box, *gtk.Label) {
 
 func (d *addDialog) present() {
 	d.win.Present()
-	d.prefillFromClipboard()
+	if d.pending == nil {
+		d.prefillFromClipboard()
+	}
 	d.urlEntry.GrabFocus()
 	d.validate()
+}
+
+// setIncoming pre-fills a browser-captured request for review. It never starts
+// a transfer; the user chooses the destination and explicitly confirms.
+func (d *addDialog) setIncoming(req uihandoff.Request) {
+	d.pending = &req
+	d.prefilling = true
+	d.urlEntry.SetText(req.URL)
+	d.urlEntry.SetPosition(-1)
+	if req.Filename != "" {
+		d.nameEntry.SetText(req.Filename)
+	}
+	d.prefilling = false
+
+	u, _ := url.Parse(req.URL)
+	host := u.Host
+	if host == "" {
+		host = "Unknown source"
+	}
+	var details []string
+	details = append(details, "Host: "+host)
+	if req.TotalBytes > 0 {
+		details = append(details, "Size: "+format.Bytes(req.TotalBytes))
+	}
+	if req.MIME != "" {
+		details = append(details, "Type: "+req.MIME)
+	}
+	if len(req.Cookies) > 0 {
+		details = append(details, fmt.Sprintf("%d browser cookies attached", len(req.Cookies)))
+	}
+	d.sourceDetails.SetLabel(strings.Join(details, " · "))
+	d.sourceDetails.SetTooltipText(req.URL)
+	if req.Referrer != "" {
+		d.sourcePage.SetLabel("Opened from: " + req.Referrer)
+		d.sourcePage.SetTooltipText(req.Referrer)
+	} else {
+		d.sourcePage.SetLabel("No referrer supplied by the browser.")
+		d.sourcePage.SetTooltipText("")
+	}
+	d.sourceBox.SetVisible(true)
+	d.urlHint.SetVisible(false)
+	d.validate()
+}
+
+// clearPending drops browser credentials as soon as the review dialog closes.
+func (d *addDialog) clearPending() {
+	if d.pending == nil {
+		return
+	}
+	for key := range d.pending.Headers {
+		d.pending.Headers[key] = ""
+	}
+	for i := range d.pending.Cookies {
+		d.pending.Cookies[i].Value = ""
+	}
+	d.pending = nil
 }
 
 func (d *addDialog) validate() {
@@ -204,6 +285,17 @@ func (d *addDialog) chooseFolder() {
 	})
 }
 
+func cloneHeaders(in map[string]string) map[string]string {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make(map[string]string, len(in))
+	for name, value := range in {
+		out[name] = value
+	}
+	return out
+}
+
 func (d *addDialog) submit() {
 	if d.submitting {
 		return
@@ -225,6 +317,13 @@ func (d *addDialog) submit() {
 		URL:      raw,
 		Dir:      strings.TrimSpace(d.dirEntry.Text()),
 		Filename: strings.TrimSpace(d.nameEntry.Text()),
+	}
+	// Browser credentials are scoped to the exact URL they were collected
+	// for. Editing the URL intentionally drops cookies, headers and referrer.
+	if d.pending != nil && raw == d.pending.URL {
+		req.Referrer = d.pending.Referrer
+		req.Headers = cloneHeaders(d.pending.Headers)
+		req.Cookies = append([]model.Cookie(nil), d.pending.Cookies...)
 	}
 
 	d.submitting = true

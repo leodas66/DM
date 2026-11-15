@@ -52,8 +52,9 @@ async function handleDownload(item: chrome.downloads.DownloadItem): Promise<void
   const accepted = await send(buildDownloadPayload(item, cookies))
   if (!accepted) return
 
-  // The daemon has the download; stop the browser's copy. A failed cancel
-  // leaves a duplicate file, which is better than losing the download.
+  // The desktop has displayed the review dialog; stop the browser's copy so
+  // it doesn't race the download the user may confirm in DM. If DM couldn't
+  // display the dialog, leave the browser's download untouched.
   try {
     await api.downloads.cancel(item.id)
   } catch {
@@ -72,8 +73,13 @@ api.contextMenus.onClicked.addListener((info, tab) => {
     referrer: tab?.url || '',
     filename: '',
     mime: '',
+    fileSize: 0,
+    totalBytes: 0,
   } as chrome.downloads.DownloadItem
-  void send(buildDownloadPayload(item))
+  void (async () => {
+    const cookies = await collectCookies(info.linkUrl!)
+    await send(buildDownloadPayload(item, cookies))
+  })()
 })
 
 // The popup and options page ask the background worker for settings and for a

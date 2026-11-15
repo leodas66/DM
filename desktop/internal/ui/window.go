@@ -18,6 +18,7 @@ import (
 	"github.com/diamondburned/gotk4/pkg/gtk/v4"
 	"github.com/vishwa/dm/desktop/internal/dmapi"
 	"github.com/vishwa/dm/internal/model"
+	"github.com/vishwa/dm/internal/uihandoff"
 )
 
 // window is the main DM window: header bar, filter sidebar, and the virtualized
@@ -80,6 +81,8 @@ type window struct {
 	inspectorRemove      *gtk.Button
 	inspectorDelete      *gtk.Button
 	addDialog            *addDialog
+	incomingQueue        []uihandoff.Request
+	handoffServer        *uihandoff.Server
 	prefsDialog          *preferencesDialog
 	catsDialog           *categoriesDialog
 	rowTimer             coreglib.SourceHandle
@@ -719,6 +722,17 @@ func itemID(item *gtk.ListItem) string {
 
 func (w *window) present() {
 	w.win.Present()
+	server, err := uihandoff.Listen()
+	if err != nil {
+		w.toast("Browser handoff is unavailable: " + err.Error())
+	} else {
+		w.handoffServer = server
+		go func() {
+			if err := server.Serve(w.ctx, w.dispatchBrowserRequest); err != nil && w.ctx.Err() == nil {
+				w.post(func() { w.toast("Browser handoff stopped: " + err.Error()) })
+			}
+		}()
+	}
 	w.installAppearance()
 	w.adaptSidebar()
 	if w.prefsWarning != "" {
@@ -842,6 +856,7 @@ func (w *window) onSnapshot(client *dmapi.Client, list []model.Download, categor
 	w.updateCategories(categories)
 	w.banner.SetVisible(false)
 	w.rebuild()
+	w.showNextIncoming()
 }
 
 func (w *window) onConnectFailure(err error) {
@@ -1370,13 +1385,66 @@ func (w *window) showAddDialog() {
 		w.addDialog.urlEntry.GrabFocus()
 		return
 	}
+	w.presentAddDialog(nil)
+}
+
+// presentAddDialog creates the one active Add dialog. Browser-captured
+// requests are queued while another Add dialog is open so existing user input
+// is never silently overwritten.
+func (w *window) presentAddDialog(incoming *uihandoff.Request) {
 	d := newAddDialog(w)
 	w.addDialog = d
+	if incoming != nil {
+		d.setIncoming(*incoming)
+	}
 	d.win.ConnectCloseRequest(func() bool {
-		w.addDialog = nil
+		d.clearPending()
+		if w.addDialog == d {
+			w.addDialog = nil
+		}
+		if len(w.incomingQueue) > 0 {
+			coreglib.IdleAdd(w.showNextIncoming)
+		}
 		return false
 	})
 	d.present()
+}
+
+func (w *window) showNextIncoming() {
+	if w.addDialog != nil || w.client == nil || len(w.incomingQueue) == 0 {
+		return
+	}
+	next := w.incomingQueue[0]
+	w.incomingQueue = w.incomingQueue[1:]
+	w.presentAddDialog(&next)
+}
+
+// dispatchBrowserRequest bridges the socket goroutine onto GTK's main loop.
+// The native host gets an acknowledgement only after the dialog is visible.
+func (w *window) dispatchBrowserRequest(req uihandoff.Request) error {
+	done := make(chan error, 1)
+	w.post(func() { done <- w.showIncomingDownload(req) })
+	select {
+	case err := <-done:
+		return err
+	case <-w.ctx.Done():
+		return w.ctx.Err()
+	}
+}
+
+func (w *window) showIncomingDownload(req uihandoff.Request) error {
+	w.win.Present()
+	if w.addDialog != nil || w.client == nil {
+		w.incomingQueue = append(w.incomingQueue, req)
+		if w.client == nil {
+			w.toast("Browser download queued until DM reconnects to its daemon.")
+		} else {
+			w.toast("Browser download queued for review. Close the current Add dialog to inspect it.")
+		}
+		return nil
+	}
+	w.presentAddDialog(&req)
+	return nil
 }
 
 func (w *window) showPreferences() {
@@ -1413,6 +1481,10 @@ func (w *window) showCategories() {
 
 func (w *window) shutdown() {
 	w.cancel()
+	if w.handoffServer != nil {
+		_ = w.handoffServer.Close()
+		w.handoffServer = nil
+	}
 	w.client = nil
 	if w.layoutTimer != 0 {
 		coreglib.SourceRemove(w.layoutTimer)

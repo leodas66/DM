@@ -25,6 +25,30 @@ jobs:
       - name: Format, vet, race tests, and build
         run: ./scripts/check.sh
 
+  extension:
+    name: Browser extension checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: extension/package-lock.json
+
+      - name: Install extension dependencies
+        working-directory: extension
+        run: npm ci
+
+      - name: Test, lint and build browser targets
+        working-directory: extension
+        run: |
+          npm test
+          npm run lint
+          npm run build
+
   desktop:
     name: GTK4 client checks
     runs-on: ubuntu-26.04

@@ -12,6 +12,7 @@ import (
 
 	"github.com/vishwa/dm/internal/model"
 	"github.com/vishwa/dm/internal/runtime"
+	"github.com/vishwa/dm/internal/uihandoff"
 )
 
 // testHost points the host at an httptest server without touching the real
@@ -185,6 +186,63 @@ func TestAddRejectsUnreadableResponse(t *testing.T) {
 	})
 	resp := host.Handle(context.Background(), Request{Command: "add", URL: "https://example.com/f"})
 	if resp.OK || resp.Error == "" {
+		t.Fatalf("response = %+v", resp)
+	}
+}
+
+func TestOpenShowsReviewDialogWithoutSubmitting(t *testing.T) {
+	host, _ := testHost(t, func(w http.ResponseWriter, r *http.Request) {
+		t.Errorf("open must not submit to the daemon: %s %s", r.Method, r.URL.Path)
+	})
+	var got uihandoff.Request
+	called := false
+	host.OpenUI = func(_ context.Context, req uihandoff.Request) error {
+		called = true
+		got = req
+		return nil
+	}
+
+	resp := host.Handle(context.Background(), Request{
+		Command:    "open",
+		URL:        "https://cdn.example/file.iso",
+		Filename:   "file.iso",
+		Referrer:   "https://example.com/article",
+		MIME:       "application/octet-stream",
+		TotalBytes: 2048,
+		Headers:    map[string]string{"User-Agent": "browser"},
+		Cookies:    []model.Cookie{{Name: "session", Value: "secret"}},
+	})
+	if !resp.OK || !called || resp.Version != "test" {
+		t.Fatalf("response = %+v, called = %v", resp, called)
+	}
+	if got.URL != "https://cdn.example/file.iso" || got.Filename != "file.iso" ||
+		got.Referrer != "https://example.com/article" || got.MIME != "application/octet-stream" ||
+		got.TotalBytes != 2048 || got.Headers["User-Agent"] != "browser" ||
+		len(got.Cookies) != 1 || got.Cookies[0].Value != "secret" {
+		t.Fatalf("UI request = %+v", got)
+	}
+}
+
+func TestOpenRejectsInvalidURLBeforeShowingDialog(t *testing.T) {
+	host, _ := testHost(t, func(w http.ResponseWriter, r *http.Request) {})
+	called := false
+	host.OpenUI = func(context.Context, uihandoff.Request) error {
+		called = true
+		return nil
+	}
+	resp := host.Handle(context.Background(), Request{Command: "open", URL: "file:///etc/passwd"})
+	if resp.OK || resp.Error == "" || called {
+		t.Fatalf("response = %+v, called = %v", resp, called)
+	}
+}
+
+func TestOpenSurfacesDesktopDisplayFailure(t *testing.T) {
+	host, _ := testHost(t, func(w http.ResponseWriter, r *http.Request) {})
+	host.OpenUI = func(context.Context, uihandoff.Request) error {
+		return errors.New("desktop is not connected")
+	}
+	resp := host.Handle(context.Background(), Request{Command: "open", URL: "https://example.com/file"})
+	if resp.OK || !strings.Contains(resp.Error, "desktop is not connected") {
 		t.Fatalf("response = %+v", resp)
 	}
 }

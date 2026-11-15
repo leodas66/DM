@@ -1,18 +1,23 @@
 # dm browser extension
 
-A Manifest V3 WebExtension (Chrome and Firefox) that sends browser downloads to
-the local [dm](../) daemon through a Native Messaging host. The extension holds
-no port and no bearer token: the host finds the daemon through its runtime
-endpoint file and reads the token itself.
+A Manifest V3 WebExtension (Chrome and Firefox) that routes browser downloads
+through a Native Messaging host into the native GTK desktop app. The app shows
+a review dialog before the request is submitted to the local [dm](../) daemon.
+The extension holds no port and no bearer token.
 
 ## What it does
 
-- Intercepts `downloads.onCreated` and asks the daemon to take the download,
-  carrying the URL, referrer, headers, and the cookies the browser would send.
-- Cancels the browser's own copy **only after** the daemon accepts it; if the
-  daemon or host is unavailable the browser download proceeds normally.
-- Context menu **Download with DM** on any link.
-- Popup to paste a URL and check whether the daemon is reachable.
+- Intercepts `downloads.onCreated` and opens the DM desktop **Add Download**
+  review dialog with the URL, source page, filename, size/type and browser
+  request context.
+- The browser's own copy is cancelled only after the desktop confirms that the
+  review dialog is visible. If the daemon, native host or desktop app is
+  unavailable, the browser download continues normally.
+- The user chooses the destination folder and confirms **Add Download** in DM.
+  Closing the review dialog cancels the captured download without starting it.
+- Context menu **Download with DM** opens the same review dialog for any link.
+- Popup to paste a URL and open it in the DM review dialog, and check daemon
+  connectivity.
 - Options page: enable capture, minimum size, host allow/deny lists.
 - Shows `!` on the toolbar button for a few seconds when a capture fails, with
   the reason in the button tooltip.
@@ -43,31 +48,32 @@ self-contained, so there is no shared `dist` root to load by mistake.
 
 ## Install the native host
 
-Build and install the host from the repository root:
+**Arch Linux package installs already include the native host and Firefox
+manifest.** Install/upgrade DM with the repository PKGBUILD, then start the
+daemon:
 
 ```sh
-make build
-./bin/dm-native-host -version
+systemctl --user enable --now dm.service
 ```
 
-Register it with the browser you use. Chrome needs the extension's ID, which is
-shown on `chrome://extensions` after you load the extension (step 5 below).
+For Chrome/Chromium, load the extension first, copy its ID from
+`chrome://extensions`, then register the per-user manifest:
 
 ```sh
-# Chrome / Chromium
-./bin/dm-native-host -manifest chrome -extension-id <your-extension-id> \
+# Chrome
+mkdir -p ~/.config/google-chrome/NativeMessagingHosts
+dm-native-host -manifest chrome -extension-id <your-extension-id> \
   > ~/.config/google-chrome/NativeMessagingHosts/io.github.vishwa.dm.json
-# Chromium uses ~/.config/chromium/NativeMessagingHosts/ instead.
 
-# Firefox
-./bin/dm-native-host -manifest firefox \
-  > ~/.mozilla/native-messaging-hosts/io.github.vishwa.dm.json
+# Chromium (use this directory instead)
+mkdir -p ~/.config/chromium/NativeMessagingHosts
+dm-native-host -manifest chromium -extension-id <your-extension-id> \
+  > ~/.config/chromium/NativeMessagingHosts/io.github.vishwa.dm.json
 ```
 
-Create the directory first if it does not exist. The manifest records the
-absolute path of `dm-native-host`, so keep the binary where you built it (or
-re-run the command after moving it). A packaged install puts the host in
-`/usr/lib/dm/` and writes the manifest from the package.
+The native host starts `dm-desktop` when needed and hands the request to the
+running app over a 0600 Unix socket in the user's DM runtime directory. URLs,
+cookies and headers are not put in command-line arguments or temporary files.
 
 ## Load unpacked
 
@@ -129,8 +135,12 @@ re-run the command after moving it). A packaged install puts the host in
 
 ## Security notes
 
-- The extension cannot reach the daemon directly: it has no token and the host
-  only implements `add` and `ping`. It cannot read, pause, or delete downloads.
+- The extension cannot reach the daemon directly: it has no token. It uses the
+  review-only `open` and health-check `ping` commands; the host retains a legacy
+  direct-add command for trusted local clients. The user confirms in the desktop
+  app before the extension's browser-captured request is submitted.
+- The browser request is passed to the desktop over a per-user Unix socket with
+  mode 0600 in a 0700 runtime directory. The socket is removed on clean exit.
 - The host refuses anything but `http://` and `https://` URLs, so the browser
   cannot make the daemon read a local file, and it drops header names or values
   containing CR/LF before forwarding.

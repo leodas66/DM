@@ -1,4 +1,4 @@
-import { buildDownloadPayload, sendToHost } from './types'
+import { buildDownloadPayload, collectCookies, sendToHost } from './types'
 
 const api = (globalThis as unknown as { browser?: typeof chrome }).browser ?? chrome
 
@@ -30,14 +30,15 @@ form.addEventListener('submit', async (e) => {
   if (!url) return
 
   sendBtn.disabled = true
-  setStatus('Sending to DM\u2026', true)
+  setStatus('Opening the review dialog in DM\u2026', true)
 
   const item = { url, referrer: '', filename: '', mime: '' } as chrome.downloads.DownloadItem
-  const response = await sendToHost(buildDownloadPayload(item))
+  const cookies = await collectCookies(url)
+  const response = await sendToHost(buildDownloadPayload(item, cookies))
   sendBtn.disabled = false
 
   if (response.ok) {
-    setStatus('Download added to DM.', true)
+    setStatus('Review the source and destination in the DM desktop window.', true)
     urlInput.value = ''
     return
   }
