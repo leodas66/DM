@@ -61,11 +61,13 @@ its runtime endpoint file, so no address or port is configured by hand.
 
 ## Automated builds and releases
 
-Every push to `main` builds Linux x86-64 and ARM64 bundles and refreshes the
-rolling `continuous` prerelease at
-https://github.com/leodas66/DM/releases/tag/continuous. The Arch PKGBUILD
-tracks that channel and derives its package version from metadata embedded in
-the downloaded bundle.
+Pull requests run the Go and GTK4 test/build checks in the `ci` workflow.
+Full release bundles are built for Linux x86-64 and ARM64 only after pushes to
+`main`, then published to the rolling `continuous` prerelease at
+https://github.com/leodas66/DM/releases/tag/continuous. The release workflow
+can also be started manually from GitHub Actions. The Arch PKGBUILD tracks
+that channel and derives its package version from metadata embedded in the
+downloaded bundle.
 
 ## Build from source
 
