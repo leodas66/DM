@@ -24,6 +24,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/vishwa/dm/internal/app"
 	"github.com/vishwa/dm/internal/manager"
 	"github.com/vishwa/dm/internal/model"
 	"github.com/vishwa/dm/internal/store"
@@ -87,8 +88,11 @@ type errorResponse struct {
 // Origin allowlist. Only the Manager writes to the store; the API only
 // issues commands to the Manager.
 type Server struct {
-	mgr   *manager.Manager
-	token string
+	downloads *app.DownloadService
+	queue     *app.QueueService
+	settings  *app.SettingsService
+	lifecycle app.Lifecycle
+	token     string
 	ln    net.Listener
 	srv   http.Server
 
@@ -111,11 +115,28 @@ type wsClient struct {
 // are the allowed Origin values; when empty, only same-host origins are
 // accepted.
 func NewServer(mgr *manager.Manager, token string, origins ...string) *Server {
+	return NewServerWithServices(
+		app.NewDownloadService(mgr),
+		app.NewQueueService(mgr),
+		app.NewSettingsService(mgr),
+		mgr,
+		token,
+		origins...,
+	)
+}
+
+// NewServerWithServices builds an API server from application services.
+// It allows the HTTP transport to depend on use cases rather than the
+// Manager implementation.
+func NewServerWithServices(downloads *app.DownloadService, queue *app.QueueService, settings *app.SettingsService, lifecycle app.Lifecycle, token string, origins ...string) *Server {
 	s := &Server{
-		mgr:     mgr,
-		token:   token,
-		origins: make(map[string]bool),
-		clients: make(map[*wsClient]struct{}),
+		downloads: downloads,
+		queue:     queue,
+		settings:  settings,
+		lifecycle: lifecycle,
+		token:     token,
+		origins:   make(map[string]bool),
+		clients:   make(map[*wsClient]struct{}),
 	}
 	for _, o := range origins {
 		s.origins[o] = true
@@ -218,10 +239,10 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 	case <-ctx.Done():
 		s.srv.Close()
 		<-errCh
-		return s.mgr.Shutdown(context.Background())
+		return s.lifecycle.Shutdown(context.Background())
 	case err := <-errCh:
 		if errors.Is(err, http.ErrServerClosed) {
-			return s.mgr.Shutdown(context.Background())
+			return s.lifecycle.Shutdown(context.Background())
 		}
 		return err
 	}
@@ -249,7 +270,7 @@ func (s *Server) Close() error {
 // a frame. Extra calls are no-ops.
 func (s *Server) Broadcast(ctx context.Context) {
 	s.broadcastOnce.Do(func() {
-		events, cancel := s.mgr.Events()
+		events, cancel := s.lifecycle.Events()
 		go func() {
 			defer cancel()
 			s.broadcastLoop(ctx, events)
@@ -326,7 +347,7 @@ func (s *Server) handleAdd(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	d, err := s.mgr.Add(r.Context(), manager.AddRequest{
+	d, err := s.downloads.Add(r.Context(), manager.AddRequest{
 		URL:        req.URL,
 		Filename:   req.Filename,
 		Dir:        req.Dir,
@@ -348,7 +369,7 @@ func (s *Server) handleAdd(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleList(w http.ResponseWriter, r *http.Request) {
-	list, err := s.mgr.List(r.Context())
+	list, err := s.downloads.List(r.Context())
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: err.Error()})
 		return
@@ -361,7 +382,7 @@ func (s *Server) handleList(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleGet(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	d, err := s.mgr.Get(r.Context(), id)
+	d, err := s.downloads.Get(r.Context(), id)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			writeJSON(w, http.StatusNotFound, errorResponse{Error: "not found"})
@@ -375,7 +396,7 @@ func (s *Server) handleGet(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handlePause(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	d, err := s.mgr.Pause(r.Context(), id)
+	d, err := s.downloads.Pause(r.Context(), id)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			writeJSON(w, http.StatusNotFound, errorResponse{Error: "not found"})
@@ -389,7 +410,7 @@ func (s *Server) handlePause(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleResume(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	d, err := s.mgr.Resume(r.Context(), id)
+	d, err := s.downloads.Resume(r.Context(), id)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			writeJSON(w, http.StatusNotFound, errorResponse{Error: "not found"})
@@ -403,7 +424,7 @@ func (s *Server) handleResume(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleCancel(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	d, err := s.mgr.Cancel(r.Context(), id)
+	d, err := s.downloads.Cancel(r.Context(), id)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			writeJSON(w, http.StatusNotFound, errorResponse{Error: "not found"})
@@ -418,7 +439,7 @@ func (s *Server) handleCancel(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleDelete(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	deleteFile := r.URL.Query().Get("deleteFile") == "true"
-	if err := s.mgr.Remove(r.Context(), id, deleteFile); err != nil {
+	if err := s.downloads.Remove(r.Context(), id, deleteFile); err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			writeJSON(w, http.StatusNotFound, errorResponse{Error: "not found"})
 		} else {
@@ -430,7 +451,7 @@ func (s *Server) handleDelete(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleSettingsGet(w http.ResponseWriter, r *http.Request) {
-	st := s.mgr.Settings()
+	st := s.settings.Get()
 	writeJSON(w, http.StatusOK, settingsResponse{
 		Dir:              st.Dir,
 		MaxConcurrent:    st.MaxConcurrent,
@@ -454,12 +475,11 @@ func (s *Server) handleSettingsPut(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, errorResponse{Error: err.Error()})
 		return
 	}
-	if err := s.mgr.UpdateSettings(st); err != nil {
+	current, err := s.settings.Update(st)
+	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: err.Error()})
 		return
 	}
-
-	current := s.mgr.Settings()
 	writeJSON(w, http.StatusOK, settingsResponse{
 		Dir:              current.Dir,
 		MaxConcurrent:    current.MaxConcurrent,
@@ -474,7 +494,7 @@ func (s *Server) handleSettingsPut(w http.ResponseWriter, r *http.Request) {
 // ---- Categories ----
 
 func (s *Server) handleCategoriesList(w http.ResponseWriter, r *http.Request) {
-	list, err := s.mgr.ListCategories(r.Context())
+	list, err := s.queue.List(r.Context())
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: err.Error()})
 		return
@@ -501,15 +521,13 @@ func (s *Server) handleCategoriesAdd(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	c := model.Category{
-		ID:         manager.NewID(),
-		Name:       strings.TrimSpace(req.Name),
-		DefaultDir: strings.TrimSpace(req.DefaultDir),
-		CreatedAt:  time.Now().UTC(),
-	}
-	created, err := s.mgr.AddCategory(r.Context(), c)
+	created, err := s.queue.Add(r.Context(), req.Name, req.DefaultDir)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: err.Error()})
+		if errors.Is(err, app.ErrInvalid) {
+			writeJSON(w, http.StatusBadRequest, errorResponse{Error: err.Error()})
+		} else {
+			writeJSON(w, http.StatusInternalServerError, errorResponse{Error: err.Error()})
+		}
 		return
 	}
 	writeJSON(w, http.StatusCreated, created)
@@ -517,7 +535,7 @@ func (s *Server) handleCategoriesAdd(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleCategoriesGet(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	cat, err := s.mgr.GetCategory(r.Context(), id)
+	cat, err := s.queue.Get(r.Context(), id)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			writeJSON(w, http.StatusNotFound, errorResponse{Error: "not found"})
@@ -531,7 +549,7 @@ func (s *Server) handleCategoriesGet(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleCategoriesDelete(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	if err := s.mgr.DeleteCategory(r.Context(), id); err != nil {
+	if err := s.queue.Delete(r.Context(), id); err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			writeJSON(w, http.StatusNotFound, errorResponse{Error: "not found"})
 		} else {
