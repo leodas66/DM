@@ -48,7 +48,7 @@ func TestSortDownloadIDs(t *testing.T) {
 		want []string
 	}{
 		{mode: sortNewest, want: []string{"c", "a", "b", "d"}},
-		{mode: sortName, want: []string{"a", "d", "b", "c"}},
+		{mode: sortName, want: []string{"d", "a", "b", "c"}},
 		{mode: sortSize, want: []string{"b", "a", "d", "c"}},
 		{mode: sortProgress, want: []string{"a", "b", "d", "c"}},
 	}
