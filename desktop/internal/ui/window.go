@@ -856,6 +856,7 @@ func (w *window) onSnapshot(client *dmapi.Client, list []model.Download, categor
 	w.updateCategories(categories)
 	w.banner.SetVisible(false)
 	w.rebuild()
+	w.showNextIncoming()
 }
 
 func (w *window) onConnectFailure(err error) {
@@ -1410,7 +1411,7 @@ func (w *window) presentAddDialog(incoming *uihandoff.Request) {
 }
 
 func (w *window) showNextIncoming() {
-	if w.addDialog != nil || len(w.incomingQueue) == 0 {
+	if w.addDialog != nil || w.client == nil || len(w.incomingQueue) == 0 {
 		return
 	}
 	next := w.incomingQueue[0]
@@ -1432,13 +1433,14 @@ func (w *window) dispatchBrowserRequest(req uihandoff.Request) error {
 }
 
 func (w *window) showIncomingDownload(req uihandoff.Request) error {
-	if w.client == nil {
-		return errors.New("DM is not connected to its daemon")
-	}
 	w.win.Present()
-	if w.addDialog != nil {
+	if w.addDialog != nil || w.client == nil {
 		w.incomingQueue = append(w.incomingQueue, req)
-		w.toast("Browser download queued for review. Close the current Add dialog to inspect it.")
+		if w.client == nil {
+			w.toast("Browser download queued until DM reconnects to its daemon.")
+		} else {
+			w.toast("Browser download queued for review. Close the current Add dialog to inspect it.")
+		}
 		return nil
 	}
 	w.presentAddDialog(&req)
