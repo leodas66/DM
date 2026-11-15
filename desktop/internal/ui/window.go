@@ -30,6 +30,12 @@ type window struct {
 	prefsPath string
 	css       *gtk.CSSProvider
 	themeButton *gtk.Button
+	sidebar *gtk.Box
+	brandText *gtk.Box
+	navHeading *gtk.Label
+	categoryHeader *gtk.Box
+	networkCard *gtk.Box
+	body *gtk.Box
 	connectFn func() (*dmapi.Client, error)
 	win       *gtk.ApplicationWindow
 
@@ -248,6 +254,7 @@ func (w *window) build() {
 	mainArea.Append(w.buildToolbar())
 
 	body := gtk.NewBox(gtk.OrientationHorizontal, 0)
+	w.body = body
 	body.SetHExpand(true)
 	body.SetVExpand(true)
 	body.Append(w.buildStack())
@@ -328,6 +335,7 @@ func (w *window) buildSidebar() *gtk.Box {
 	brandIcon.SetPixelSize(18)
 	mark.Append(brandIcon)
 	brandText := gtk.NewBox(gtk.OrientationVertical, 0)
+	w.brandText = brandText
 	brandName := newLabel("dm")
 	brandName.AddCSSClass("dm-brand-name")
 	brandText.Append(brandName)
@@ -347,6 +355,7 @@ func (w *window) buildSidebar() *gtk.Box {
 	w.filterList.SetMarginStart(6)
 	w.filterList.SetMarginEnd(6)
 	sectionLabel := newDimLabel("LIBRARY")
+	w.navHeading = sectionLabel
 	sectionLabel.AddCSSClass("dm-nav-heading")
 	sectionLabel.SetMarginTop(8)
 	sectionLabel.SetMarginBottom(2)
@@ -374,6 +383,7 @@ func (w *window) buildSidebar() *gtk.Box {
 
 	w.categoryBox = gtk.NewBox(gtk.OrientationVertical, 0)
 	categoryHeader := gtk.NewBox(gtk.OrientationHorizontal, 4)
+	w.categoryHeader = categoryHeader
 	categoryHeader.SetMarginTop(12)
 	categoryHeader.SetMarginBottom(2)
 	categoryHeader.SetMarginStart(10)
@@ -400,6 +410,7 @@ func (w *window) buildSidebar() *gtk.Box {
 	box.Append(scroll)
 
 	network := gtk.NewBox(gtk.OrientationVertical, 3)
+	w.networkCard = network
 	network.AddCSSClass("dm-network-card")
 	network.SetMarginTop(10)
 	network.SetMarginBottom(12)
@@ -413,6 +424,7 @@ func (w *window) buildSidebar() *gtk.Box {
 	network.Append(w.networkSpeedLabel)
 	box.Append(gtk.NewSeparator(gtk.OrientationHorizontal))
 	box.Append(network)
+	w.sidebar = box
 
 	w.filterList.ConnectRowSelected(func(row *gtk.ListBoxRow) {
 		if row == nil || w.updatingSelection {
