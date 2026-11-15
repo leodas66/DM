@@ -95,12 +95,12 @@ func (w *window) currentPalette() string {
 }
 
 func (w *window) installAppearance() {
-	if w.win == nil || w.win.Display() == nil {
+	if w.win == nil || w.win.Window.Display() == nil {
 		return
 	}
 	w.css = gtk.NewCSSProvider()
 	gtk.StyleContextAddProviderForDisplay(
-		w.win.Display(),
+		w.win.Window.Display(),
 		w.css,
 		gtk.STYLE_PROVIDER_PRIORITY_APPLICATION,
 	)
@@ -117,12 +117,12 @@ func (w *window) applyAppearance() {
 		return
 	}
 	if w.css == nil {
-		if w.win.Display() == nil {
+		if w.win.Window.Display() == nil {
 			return
 		}
 		w.css = gtk.NewCSSProvider()
 		gtk.StyleContextAddProviderForDisplay(
-			w.win.Display(),
+			w.win.Window.Display(),
 			w.css,
 			gtk.STYLE_PROVIDER_PRIORITY_APPLICATION,
 		)
