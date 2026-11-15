@@ -686,6 +686,9 @@ func (w *window) present() {
 	w.win.Present()
 	w.installAppearance()
 	w.adaptSidebar()
+	if w.prefsWarning != "" {
+		w.toast("Using default appearance preferences: " + w.prefsWarning)
+	}
 	w.layoutTimer = coreglib.TimeoutAdd(250, func() bool {
 		w.adaptSidebar()
 		return w.ctx.Err() == nil
