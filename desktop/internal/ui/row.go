@@ -46,6 +46,7 @@ func newRow(w *window) *row {
 	// Compact three-part row: type icon, a two-line text column, and the
 	// state/action column. Keep padding tight so more downloads fit on screen.
 	r.root = gtk.NewBox(gtk.OrientationVertical, 0)
+	r.root.AddCSSClass("dm-download-row")
 	r.root.SetMarginTop(8)
 	r.root.SetMarginBottom(8)
 	r.root.SetMarginStart(12)
