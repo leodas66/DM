@@ -33,7 +33,7 @@ func TestResolvePalette(t *testing.T) {
 }
 
 func TestBuildStylesheetDefinesEveryUsedColor(t *testing.T) {
-	definedRE := regexp.MustCompile(`@define-color\\s+(dm_[a-z0-9_]+)`)
+	definedRE := regexp.MustCompile(`@define-color\s+(dm_[a-z0-9_]+)`)
 	usedRE := regexp.MustCompile(`@(dm_[a-z0-9_]+)`)
 	for _, palette := range []string{"dark", "light", "dark-hc", "light-hc"} {
 		t.Run(palette, func(t *testing.T) {
