@@ -36,29 +36,29 @@ type window struct {
 	loaded      bool
 	categories  []model.Category
 	defaultDir  string
-	settings    dmapi.Settings
-	sortMode    sortMode
-	searchEntry *gtk.Entry
-	pauseAllButton *gtk.Button
-	resumeAllButton *gtk.Button
-	clearCompletedButton *gtk.Button
-	networkActiveLabel *gtk.Label
-	networkSpeedLabel *gtk.Label
-	selectedID string
-	inspectorRevealer *gtk.Revealer
-	inspectorTitle *gtk.Label
-	inspectorHost *gtk.Label
-	inspectorStatus *gtk.Label
-	inspectorProgress *gtk.ProgressBar
-	inspectorStats *gtk.Label
-	inspectorSource *gtk.Label
-	inspectorDestination *gtk.Label
-	inspectorSegments *gtk.Label
-	inspectorPrimary *gtk.Button
-	inspectorCancel *gtk.Button
-	inspectorOpen *gtk.Button
-	inspectorRemove *gtk.Button
-	inspectorDelete *gtk.Button
+	settings                dmapi.Settings
+	sortMode                sortMode
+	searchEntry             *gtk.Entry
+	pauseAllButton          *gtk.Button
+	resumeAllButton         *gtk.Button
+	clearCompletedButton    *gtk.Button
+	networkActiveLabel      *gtk.Label
+	networkSpeedLabel       *gtk.Label
+	selectedID              string
+	inspectorRevealer       *gtk.Revealer
+	inspectorTitle          *gtk.Label
+	inspectorHost           *gtk.Label
+	inspectorStatus         *gtk.Label
+	inspectorProgress       *gtk.ProgressBar
+	inspectorStats          *gtk.Label
+	inspectorSource         *gtk.Label
+	inspectorDestination    *gtk.Label
+	inspectorSegments       *gtk.Label
+	inspectorPrimary        *gtk.Button
+	inspectorCancel         *gtk.Button
+	inspectorOpen           *gtk.Button
+	inspectorRemove         *gtk.Button
+	inspectorDelete         *gtk.Button
 	addDialog   *addDialog
 	prefsDialog *preferencesDialog
 	catsDialog  *categoriesDialog
