@@ -48,7 +48,7 @@ The desktop workspace follows the approved DM v3 composition.
 1. A compact GTK header bar with the view title, search, appearance toggle, Preferences and the primary New download action.
 2. A 232 px navigation sidebar with the DM brand/version, lifecycle filters, user categories and a network summary card.
 3. A main content area with a page title and metadata, a bulk-action/sort toolbar, and the virtualized download list.
-4. A download inspector at the right on wide windows. It is visible by default at widths of 1180 px and above; below that width it becomes an on-demand bottom sheet. It must not permanently steal list space on narrow windows.
+4. A download inspector at the right on wide windows. It is visible by default at widths of 1440 px and above; below that width it becomes an on-demand bottom sheet. The higher native-GTK breakpoint preserves a usable 824 px table beside the 232 px sidebar and 336 px inspector.
 
 The sidebar exposes All, Active/Downloading, Queued, Paused, Completed and Failed. User categories appear as a separate group when available. Canceled items remain discoverable in All/history.
 
@@ -181,7 +181,7 @@ Use the smallest relevant UI skill set. Apply native GTK equivalents of baseline
 Before calling the v3 UI complete, verify:
 
 - The workspace follows the v3 hierarchy at 1280×820 and remains usable at 1180, 1024, 900 and 700 px.
-- The inspector is a right pane at 1180 px and above, and a bottom sheet below that breakpoint.
+- The inspector is a right pane at 1440 px and above, and a bottom sheet below that breakpoint.
 - Dark, light and both high-contrast palettes render without undefined tokens or CSS parsing warnings.
 - Text and controls meet contrast requirements in each palette; state remains understandable without color.
 - Comfortable and Compact density preferences survive restart and do not alter daemon settings.
