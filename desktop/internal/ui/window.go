@@ -58,6 +58,7 @@ type window struct {
 	networkSpeedLabel    *gtk.Label
 	selectedID           string
 	inspectorRevealer    *gtk.Revealer
+	inspectorPanel       *gtk.Box
 	inspectorTitle       *gtk.Label
 	inspectorHost        *gtk.Label
 	inspectorStatus      *gtk.Label
@@ -75,6 +76,7 @@ type window struct {
 	prefsDialog          *preferencesDialog
 	catsDialog           *categoriesDialog
 	rowTimer             coreglib.SourceHandle
+	layoutTimer          coreglib.SourceHandle
 	toastSource          coreglib.SourceHandle
 	retryCh              chan struct{}
 
@@ -261,7 +263,8 @@ func (w *window) build() {
 	w.inspectorRevealer = gtk.NewRevealer()
 	w.inspectorRevealer.SetTransitionType(gtk.RevealerTransitionTypeSlideLeft)
 	w.inspectorRevealer.SetTransitionDuration(150)
-	w.inspectorRevealer.SetChild(w.buildInspector())
+	w.inspectorPanel = w.buildInspector()
+	w.inspectorRevealer.SetChild(w.inspectorPanel)
 	w.inspectorRevealer.SetRevealChild(false)
 	body.Append(w.inspectorRevealer)
 	mainArea.Append(body)
@@ -678,6 +681,10 @@ func (w *window) present() {
 	w.win.Present()
 	w.installAppearance()
 	w.adaptSidebar()
+	w.layoutTimer = coreglib.TimeoutAdd(250, func() bool {
+		w.adaptSidebar()
+		return w.ctx.Err() == nil
+	})
 	w.loadingSpinner.Start()
 	go w.loop()
 }
@@ -1066,27 +1073,72 @@ func (w *window) syncSelection() {
 	}
 }
 
-// sidebarBreakpoint is the window width below which the filter sidebar is
-// hidden automatically. The header toggle still opens it on demand.
-const sidebarBreakpoint = 820
+// sidebarBreakpoint is the width below which the full sidebar collapses
+// to an icon rail. All navigation destinations remain reachable.
+const sidebarBreakpoint = 900
 
-// adaptSidebar collapses the sidebar on narrow windows so the list keeps its
-// room, and restores it when there is space again unless the user toggled it.
+// adaptSidebar responds to the allocated window width. It is called on initial
+// presentation and from a small main-loop poll because default-width is only
+// the requested size and does not change when the user resizes the window.
 func (w *window) adaptSidebar() {
-	width, ok := w.win.ObjectProperty("default-width").(int)
-	if !ok || width <= 0 {
+	if w.win == nil {
 		return
 	}
-	if w.inspectorRevealer != nil {
-		w.inspectorRevealer.SetRevealChild(width >= 1180 || w.selectedID != "")
+	width := w.win.Width()
+	if width <= 0 {
+		return
 	}
-	switch {
-	case width < sidebarBreakpoint && w.sidebarRevealer.RevealChild():
-		w.setSidebarVisible(false)
-		w.sidebarAuto = true
-	case width >= sidebarBreakpoint && w.sidebarAuto:
-		w.setSidebarVisible(true)
-		w.sidebarAuto = false
+
+	rail := width < sidebarBreakpoint
+	if w.sidebar != nil {
+		if rail {
+			w.sidebar.SetSizeRequest(64, -1)
+			w.sidebar.AddCSSClass("dm-sidebar-rail")
+		} else {
+			w.sidebar.SetSizeRequest(232, -1)
+			w.sidebar.RemoveCSSClass("dm-sidebar-rail")
+		}
+	}
+	if w.brandText != nil {
+		w.brandText.SetVisible(!rail)
+	}
+	if w.navHeading != nil {
+		w.navHeading.SetVisible(!rail)
+	}
+	for _, fr := range w.filterRows {
+		fr.name.SetVisible(!rail)
+		fr.count.SetVisible(!rail)
+	}
+	for _, cr := range w.categoryRows {
+		cr.name.SetVisible(!rail)
+		cr.count.SetVisible(!rail)
+	}
+	if w.categoryHeader != nil {
+		w.categoryHeader.SetVisible(!rail && len(w.categoryRows) > 0)
+	}
+	if w.categoryBox != nil {
+		w.categoryBox.SetVisible(!rail && len(w.categoryRows) > 0)
+	}
+	if w.networkCard != nil {
+		w.networkCard.SetVisible(!rail)
+	}
+
+	if w.body != nil && w.inspectorRevealer != nil {
+		if width >= 1180 {
+			w.body.SetOrientation(gtk.OrientationHorizontal)
+			w.inspectorRevealer.SetTransitionType(gtk.RevealerTransitionTypeSlideLeft)
+			w.inspectorRevealer.SetSizeRequest(336, -1)
+			w.inspectorRevealer.SetRevealChild(true)
+			w.inspectorPanel.RemoveCSSClass("dm-inspector-sheet")
+			w.inspectorPanel.AddCSSClass("dm-inspector-wide")
+		} else {
+			w.body.SetOrientation(gtk.OrientationVertical)
+			w.inspectorRevealer.SetTransitionType(gtk.RevealerTransitionTypeSlideUp)
+			w.inspectorRevealer.SetSizeRequest(-1, 360)
+			w.inspectorRevealer.SetRevealChild(w.selectedID != "")
+			w.inspectorPanel.RemoveCSSClass("dm-inspector-wide")
+			w.inspectorPanel.AddCSSClass("dm-inspector-sheet")
+		}
 	}
 }
 
@@ -1271,6 +1323,10 @@ func (w *window) showCategories() {
 func (w *window) shutdown() {
 	w.cancel()
 	w.client = nil
+	if w.layoutTimer != 0 {
+		coreglib.SourceRemove(w.layoutTimer)
+		w.layoutTimer = 0
+	}
 	if w.rowTimer != 0 {
 		coreglib.SourceRemove(w.rowTimer)
 		w.rowTimer = 0
