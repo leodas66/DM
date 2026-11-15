@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/diamondburned/gotk4/pkg/gdk/v4"
 	"github.com/diamondburned/gotk4/pkg/gtk/v4"
 )
 
@@ -95,12 +96,12 @@ func (w *window) currentPalette() string {
 }
 
 func (w *window) installAppearance() {
-	if w.win == nil || w.win.Window.Display() == nil {
+	if w.win == nil || gdk.DisplayGetDefault() == nil {
 		return
 	}
 	w.css = gtk.NewCSSProvider()
 	gtk.StyleContextAddProviderForDisplay(
-		w.win.Window.Display(),
+		gdk.DisplayGetDefault(),
 		w.css,
 		gtk.STYLE_PROVIDER_PRIORITY_APPLICATION,
 	)
@@ -117,12 +118,12 @@ func (w *window) applyAppearance() {
 		return
 	}
 	if w.css == nil {
-		if w.win.Window.Display() == nil {
+		if gdk.DisplayGetDefault() == nil {
 			return
 		}
 		w.css = gtk.NewCSSProvider()
 		gtk.StyleContextAddProviderForDisplay(
-			w.win.Window.Display(),
+			gdk.DisplayGetDefault(),
 			w.css,
 			gtk.STYLE_PROVIDER_PRIORITY_APPLICATION,
 		)
