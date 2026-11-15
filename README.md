@@ -103,27 +103,25 @@ cgo and GTK. CI runs both jobs.
 
 ## Browser integration
 
-The extension in `extension/` sends browser downloads to the daemon through
-`dm-native-host`, which speaks Native Messaging on stdin/stdout and forwards
-`add`/`ping` to the authenticated loopback API. The extension holds no port and
-no token.
+The extension in `extension/` sends browser download requests through
+`dm-native-host` to the GTK desktop review dialog. DM shows the original URL,
+source page, file details and destination folder; the request reaches the
+daemon only after the user confirms **Add Download**. If the UI cannot accept
+the request, the browser's own download continues normally.
 
 ```sh
 cd extension && npm install && npm run build   # dist/chrome and dist/firefox
-# then load dist/chrome unpacked, or dist/firefox as a temporary add-on
 ```
 
-Chrome needs a per-user host manifest because it allowlists the extension ID,
-which is only known after the extension is loaded:
+For Firefox, the Arch package already installs the system Native Messaging
+manifest. Load `extension/dist/firefox/manifest.json` through
+`about:debugging#/runtime/this-firefox`. Chrome needs a per-user host manifest
+because it allowlists the extension ID; see `extension/README.md`.
 
-```sh
-dm-native-host -manifest chrome -extension-id <id> \
-  > ~/.config/google-chrome/NativeMessagingHosts/io.github.vishwa.dm.json
-```
-
-Firefox is already covered by the packaged system manifest. The host refuses
-non-`http(s)` URLs and strips CR/LF from forwarded headers and cookie names.
-See `extension/README.md` for loading, troubleshooting, and settings.
+The Native Messaging host starts `dm-desktop` if necessary and uses a 0600
+per-user Unix socket for the transient browser request. Cookies and headers
+remain in memory and are sent to the daemon only after confirmation. See
+`extension/README.md` for settings and troubleshooting.
 
 ## Layout
 
