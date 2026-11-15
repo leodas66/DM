@@ -5,28 +5,36 @@ import (
 
 	"github.com/diamondburned/gotk4/pkg/gtk/v4"
 	"github.com/diamondburned/gotk4/pkg/pango"
+	"github.com/vishwa/dm/desktop/internal/dmapi"
+	"github.com/vishwa/dm/desktop/internal/format"
 	"github.com/vishwa/dm/internal/model"
 )
 
-// row is one download row. GTK recycles these widgets: bind fills it from the
-// store, unbind clears the association. The row never owns download state.
+// row is one virtualized table row. GTK recycles these widgets; bind fills it
+// from the store, and unbind clears the association. The row never owns state.
 type row struct {
 	w    *window
 	root *gtk.Box
 
+	fileCell     *gtk.Box
 	fileIcon     *gtk.Image
 	title        *gtk.Label
 	context      *gtk.Label
+	progressCell *gtk.Box
+	progressTop  *gtk.Box
 	icon         *gtk.Image
 	status       *gtk.Label
 	spinner      *gtk.Spinner
 	progress     *gtk.ProgressBar
-	progressSlot *gtk.Box
+	progressBytes *gtk.Label
+	sizeLabel    *gtk.Label
+	speedLabel   *gtk.Label
+	etaLabel     *gtk.Label
 
-	pause     *gtk.Button
-	pauseSlot *gtk.Box
-	menu      *gtk.MenuButton
-	popover   *gtk.Popover
+	actionCell *gtk.Box
+	pause      *gtk.Button
+	menu       *gtk.MenuButton
+	popover    *gtk.Popover
 
 	detailsItem *gtk.Button
 	cancelItem  *gtk.Button
@@ -39,93 +47,102 @@ type row struct {
 	dimmed         bool
 }
 
-// newRow builds the row widget tree once; setDownload updates it in place.
+// newRow creates a six-column row whose fixed cell widths align with the
+// table header. The filename column absorbs spare width and ellipsizes safely.
 func newRow(w *window) *row {
 	r := &row{w: w}
 
-	// Compact three-part row: type icon, a two-line text column, and the
-	// state/action column. Keep padding tight so more downloads fit on screen.
-	r.root = gtk.NewBox(gtk.OrientationVertical, 0)
+	r.root = gtk.NewBox(gtk.OrientationHorizontal, 8)
 	r.root.AddCSSClass("dm-download-row")
+	r.root.SetHExpand(true)
 	r.root.SetMarginTop(8)
 	r.root.SetMarginBottom(8)
 	r.root.SetMarginStart(12)
 	r.root.SetMarginEnd(12)
 
-	head := gtk.NewBox(gtk.OrientationHorizontal, 12)
-
+	// Name: file type icon plus filename and source context.
+	r.fileCell = gtk.NewBox(gtk.OrientationHorizontal, 10)
+	r.fileCell.SetSizeRequest(170, -1)
+	r.fileCell.SetHExpand(true)
+	r.fileCell.SetVAlign(gtk.AlignCenter)
 	r.fileIcon = gtk.NewImage()
 	r.fileIcon.SetPixelSize(24)
-	r.fileIcon.SetVAlign(gtk.AlignCenter)
-	r.fileIcon.AddCSSClass("dim-label")
+	r.fileIcon.AddCSSClass("dm-file-icon")
+	r.fileCell.Append(r.fileIcon)
 
-	textCol := gtk.NewBox(gtk.OrientationVertical, 2)
-	textCol.SetHExpand(true)
+	fileText := gtk.NewBox(gtk.OrientationVertical, 2)
+	fileText.SetHExpand(true)
 	r.title = newEllipsizedLabel("")
 	r.title.SetHExpand(true)
-	r.title.AddCSSClass("heading")
+	r.title.AddCSSClass("dm-file-name")
 	r.context = newEllipsizedLabel("")
-	r.context.AddCSSClass("dim-label")
-	textCol.Append(r.title)
-	textCol.Append(r.context)
+	r.context.SetHExpand(true)
+	r.context.AddCSSClass("dm-file-context")
+	fileText.Append(r.title)
+	fileText.Append(r.context)
+	r.fileCell.Append(fileText)
+	r.root.Append(r.fileCell)
 
-	statusCol := gtk.NewBox(gtk.OrientationHorizontal, 8)
-	statusCol.SetVAlign(gtk.AlignCenter)
+	// Progress: status/percentage and downloaded bytes above the progress bar.
+	r.progressCell = gtk.NewBox(gtk.OrientationVertical, 5)
+	r.progressCell.SetSizeRequest(125, -1)
+	r.progressCell.SetVAlign(gtk.AlignCenter)
+
+	r.progressTop = gtk.NewBox(gtk.OrientationHorizontal, 5)
+	r.progressTop.SetVAlign(gtk.AlignCenter)
 	r.spinner = gtk.NewSpinner()
-	r.spinner.SetVAlign(gtk.AlignCenter)
 	r.spinner.SetVisible(false)
 	r.icon = gtk.NewImage()
-	r.icon.SetPixelSize(16)
+	r.icon.SetPixelSize(13)
 	r.icon.SetVisible(false)
-	r.status = newLabel("")
-	r.status.SetSingleLineMode(true)
-	r.status.SetEllipsize(pango.EllipsizeEnd)
-	// A fixed character width keeps the state column aligned across rows even
-	// when the action buttons differ.
-	r.status.SetWidthChars(15)
-	r.status.SetXAlign(1)
-	r.status.AddCSSClass("dim-label")
-	r.dimmed = true
+	r.status = newEllipsizedLabel("")
+	r.status.SetHExpand(true)
+	r.status.AddCSSClass("dm-progress-status")
+	r.progressBytes = newEllipsizedLabel("")
+	r.progressBytes.SetHAlign(gtk.AlignEnd)
+	r.progressBytes.AddCSSClass("dm-progress-bytes")
+	r.progressTop.Append(r.spinner)
+	r.progressTop.Append(r.icon)
+	r.progressTop.Append(r.status)
+	r.progressTop.Append(r.progressBytes)
+	r.progressCell.Append(r.progressTop)
+
+	r.progress = gtk.NewProgressBar()
+	r.progress.SetShowText(false)
+	r.progress.SetHExpand(true)
+	r.progress.AddCSSClass("dm-row-progress")
+	r.progressCell.Append(r.progress)
+	r.root.Append(r.progressCell)
+
+	// Numeric columns use tabular alignment and never infer missing values.
+	r.sizeLabel = tableValueLabel(58, gtk.AlignEnd)
+	r.sizeLabel.AddCSSClass("dm-table-value")
+	r.root.Append(r.sizeLabel)
+
+	r.speedLabel = tableValueLabel(66, gtk.AlignEnd)
+	r.speedLabel.AddCSSClass("dm-table-value")
+	r.root.Append(r.speedLabel)
+
+	r.etaLabel = tableValueLabel(55, gtk.AlignEnd)
+	r.etaLabel.AddCSSClass("dm-table-value")
+	r.root.Append(r.etaLabel)
+
+	// Actions: one state-aware primary action and a quieter overflow menu.
+	r.actionCell = gtk.NewBox(gtk.OrientationHorizontal, 2)
+	r.actionCell.SetSizeRequest(62, -1)
+	r.actionCell.SetHAlign(gtk.AlignEnd)
+	r.actionCell.SetVAlign(gtk.AlignCenter)
 	r.pause = newIconButton("media-playback-pause-symbolic", "Pause")
-	// A fixed slot keeps the state label aligned across rows whether or not
-	// the pause control applies to that state.
-	r.pauseSlot = gtk.NewBox(gtk.OrientationHorizontal, 0)
-	r.pauseSlot.SetSizeRequest(40, -1)
-	r.pauseSlot.SetHAlign(gtk.AlignCenter)
-	r.pauseSlot.Append(r.pause)
+	r.actionCell.Append(r.pause)
 	r.menu = gtk.NewMenuButton()
 	r.menu.SetIconName("view-more-symbolic")
 	r.menu.SetHasFrame(false)
 	r.menu.SetTooltipText("More actions")
 	setAccessibleLabel(r.menu.Accessible, "More actions")
-	statusCol.Append(r.spinner)
-	statusCol.Append(r.icon)
-	statusCol.Append(r.status)
-	statusCol.Append(r.pauseSlot)
-	statusCol.Append(r.menu)
+	r.actionCell.Append(r.menu)
+	r.root.Append(r.actionCell)
 
-	head.Append(r.fileIcon)
-	head.Append(textCol)
-	head.Append(statusCol)
-
-	// The bar lines up under the filename, past the type icon. The slot stays
-	// reserved for every in-flight state so rows do not jump in height when a
-	// transfer moves between queued, running, and paused.
-	r.progress = gtk.NewProgressBar()
-	r.progress.SetShowText(false)
-	r.progress.SetHExpand(true)
-	r.progress.SetVisible(false)
-	r.progressSlot = gtk.NewBox(gtk.OrientationVertical, 0)
-	r.progressSlot.SetMarginStart(36)
-	r.progressSlot.SetMarginTop(6)
-	r.progressSlot.SetVisible(false)
-	r.progressSlot.Append(r.progress)
-
-	r.root.Append(head)
-	r.root.Append(r.progressSlot)
-
-	// Row menu: only the actions that apply to the current state are shown,
-	// so unavailable actions never appear as active controls.
+	// Row menu: only actions that apply to the current state are available.
 	r.popover = gtk.NewPopover()
 	menuBox := gtk.NewBox(gtk.OrientationVertical, 2)
 	menuBox.SetMarginTop(6)
@@ -137,7 +154,7 @@ func newRow(w *window) *row {
 	r.cancelItem = newMenuItem("Cancel")
 	r.openItem = newMenuItem("Open File")
 	r.removeItem = newMenuItem("Remove from List")
-	r.deleteItem = newMenuItem("Delete File\u2026")
+	r.deleteItem = newMenuItem("Delete File…")
 	for _, item := range []*gtk.Button{r.detailsItem, r.cancelItem, r.openItem, r.removeItem, r.deleteItem} {
 		menuBox.Append(item)
 	}
@@ -184,6 +201,23 @@ func newRow(w *window) *row {
 	return r
 }
 
+func tableValueLabel(width int, align gtk.Align) *gtk.Label {
+	label := newEllipsizedLabel("—")
+	label.SetSizeRequest(width, -1)
+	label.SetXAlign(1)
+	label.SetHAlign(align)
+	label.SetVAlign(gtk.AlignCenter)
+	label.AddCSSClass("dm-table-value")
+	return label
+}
+
+// setColumns keeps each virtualized row in sync with the responsive header.
+func (r *row) setColumns(showSize, showSpeed, showETA bool) {
+	r.sizeLabel.SetVisible(showSize)
+	r.speedLabel.SetVisible(showSpeed)
+	r.etaLabel.SetVisible(showETA)
+}
+
 // newMenuItem builds a flat, full-width button suitable for a row popover.
 func newMenuItem(text string) *gtk.Button {
 	b := gtk.NewButton()
@@ -196,7 +230,8 @@ func newMenuItem(text string) *gtk.Button {
 	return b
 }
 
-// setDownload renders d and the sampled transfer rate.
+// setDownload renders d and the sampled transfer rate. All numeric values come
+// from the daemon snapshot/rate sampler; unknown values are rendered as dashes.
 func (r *row) setDownload(d model.Download, bytesPerSecond float64) {
 	r.id = d.ID
 	if r.w.prefs.Density == densityCompact {
@@ -206,30 +241,34 @@ func (r *row) setDownload(d model.Download, bytesPerSecond float64) {
 		r.root.SetMarginTop(8)
 		r.root.SetMarginBottom(8)
 	}
+
 	text := describe(d, bytesPerSecond)
+	downloaded := dmapi.Downloaded(d)
 
 	r.fileIcon.SetFromIconName(fileIcon(text.Title))
 	r.title.SetLabel(text.Title)
 	r.title.SetTooltipText(text.Title)
-	r.context.SetLabel(text.Context)
-	r.context.SetVisible(text.Context != "")
-	if text.Detail != "" {
-		r.context.SetTooltipText(text.Detail)
-	} else {
-		r.context.SetTooltipText("")
+	context := text.Context
+	if d.Status != model.StatusFailed && d.Status != model.StatusScheduled {
+		context = hostOf(d)
+		if activeStatus(d.Status) && len(d.Segments) > 0 {
+			context = format.Context(context, formatCount(len(d.Segments), "connection"))
+		}
 	}
+	r.context.SetLabel(context)
+	r.context.SetVisible(context != "")
+	r.context.SetTooltipText(text.Detail)
+
 	r.status.SetLabel(text.Status)
 	r.status.SetTooltipText(text.Status)
 
-	// A failed row is the one state that should read at normal emphasis; the
-	// status icon carries the alarm, not an app-defined colour.
 	wantDim := d.Status != model.StatusFailed
 	if wantDim != r.dimmed {
-		for _, l := range []*gtk.Label{r.status, r.context} {
+		for _, label := range []*gtk.Label{r.status, r.context} {
 			if wantDim {
-				l.AddCSSClass("dim-label")
+				label.AddCSSClass("dim-label")
 			} else {
-				l.RemoveCSSClass("dim-label")
+				label.RemoveCSSClass("dim-label")
 			}
 		}
 		r.dimmed = wantDim
@@ -241,7 +280,6 @@ func (r *row) setDownload(d model.Download, bytesPerSecond float64) {
 	} else {
 		r.icon.SetVisible(false)
 	}
-
 	if text.Spinning {
 		r.spinner.SetVisible(true)
 		r.spinner.Start()
@@ -250,15 +288,52 @@ func (r *row) setDownload(d model.Download, bytesPerSecond float64) {
 		r.spinner.SetVisible(false)
 	}
 
-	inFlightState := d.Status == model.StatusRunning || d.Status == model.StatusProbing ||
-		d.Status == model.StatusQueued || d.Status == model.StatusScheduled ||
-		d.Status == model.StatusPaused
-	r.progressSlot.SetVisible(inFlightState)
-	if text.Determinate {
-		r.progress.SetVisible(true)
-		r.progress.SetFraction(text.Fraction)
+	showProgress := text.Determinate
+	fraction := text.Fraction
+	if d.Status == model.StatusCompleted && d.Size > 0 {
+		showProgress = true
+		fraction = 1
+	}
+	r.progress.SetVisible(showProgress)
+	if showProgress {
+		r.progress.SetFraction(fraction)
+	}
+	if d.Size > 0 {
+		r.progressBytes.SetLabel(format.Bytes(downloaded))
+		r.progressBytes.SetTooltipText(format.Bytes(downloaded) + " of " + format.Bytes(d.Size) + " downloaded")
+	} else if downloaded > 0 {
+		r.progressBytes.SetLabel(format.Bytes(downloaded))
+		r.progressBytes.SetTooltipText(format.Bytes(downloaded) + " downloaded; total size unknown")
 	} else {
-		r.progress.SetVisible(false)
+		r.progressBytes.SetLabel("")
+		r.progressBytes.SetTooltipText("")
+	}
+
+	if d.Size > 0 {
+		r.sizeLabel.SetLabel(format.Bytes(d.Size))
+		r.sizeLabel.SetTooltipText(format.Bytes(d.Size))
+	} else {
+		r.sizeLabel.SetLabel("—")
+		r.sizeLabel.SetTooltipText("Total size unknown")
+	}
+	if activeStatus(d.Status) && bytesPerSecond >= 1 {
+		r.speedLabel.SetLabel(format.Rate(bytesPerSecond))
+		r.speedLabel.SetTooltipText(format.Rate(bytesPerSecond))
+	} else {
+		r.speedLabel.SetLabel("—")
+		r.speedLabel.SetTooltipText("No active transfer rate")
+	}
+	if d.Status == model.StatusRunning && d.Size > downloaded {
+		if eta, ok := format.ETA(d.Size-downloaded, bytesPerSecond); ok {
+			r.etaLabel.SetLabel(eta)
+			r.etaLabel.SetTooltipText(eta + " remaining")
+		} else {
+			r.etaLabel.SetLabel("—")
+			r.etaLabel.SetTooltipText("ETA unavailable")
+		}
+	} else {
+		r.etaLabel.SetLabel("—")
+		r.etaLabel.SetTooltipText("ETA unavailable for this state or unknown size")
 	}
 
 	switch d.Status {
@@ -271,8 +346,6 @@ func (r *row) setDownload(d model.Download, bytesPerSecond float64) {
 		r.pause.SetIconName("media-playback-start-symbolic")
 		r.setButtonAccessible(r.pause, "Resume "+text.Title)
 	case model.StatusFailed, model.StatusCanceled:
-		// Retry is a fresh attempt, not a continuation: the icon says so and
-		// the control is the same slot the in-flight states use.
 		r.pause.SetVisible(true)
 		r.pause.SetIconName("view-refresh-symbolic")
 		r.setButtonAccessible(r.pause, "Retry "+text.Title)
@@ -280,15 +353,18 @@ func (r *row) setDownload(d model.Download, bytesPerSecond float64) {
 		r.pause.SetVisible(false)
 	}
 
+	inFlight := d.Status == model.StatusRunning || d.Status == model.StatusProbing ||
+		d.Status == model.StatusQueued || d.Status == model.StatusScheduled || d.Status == model.StatusPaused
 	terminal := d.Status == model.StatusCompleted || d.Status == model.StatusFailed ||
 		d.Status == model.StatusCanceled
-
-	r.cancelItem.SetVisible(inFlightState)
+	r.cancelItem.SetVisible(inFlight)
 	r.openItem.SetVisible(d.Status == model.StatusCompleted)
 	r.removeItem.SetVisible(terminal)
 	r.deleteItem.SetVisible(terminal)
 
-	accessible := strings.Join(nonEmpty(text.Title, text.Status, text.Context), ", ")
+	accessible := strings.Join(nonEmpty(
+		text.Title, text.Status, context, r.sizeLabel.Text(), r.speedLabel.Text(), r.etaLabel.Text(),
+	), ", ")
 	if accessible != r.lastAccessible {
 		setAccessibleLabel(r.root.Accessible, accessible)
 		r.lastAccessible = accessible
@@ -300,11 +376,18 @@ func (r *row) setButtonAccessible(b *gtk.Button, text string) {
 	setAccessibleLabel(b.Accessible, text)
 }
 
+func formatCount(count int, singular string) string {
+	if count == 1 {
+		return "1 " + singular
+	}
+	return fmt.Sprintf("%d %ss", count, singular)
+}
+
 func nonEmpty(parts ...string) []string {
 	out := make([]string, 0, len(parts))
-	for _, p := range parts {
-		if p != "" {
-			out = append(out, p)
+	for _, part := range parts {
+		if part != "" {
+			out = append(out, part)
 		}
 	}
 	return out
