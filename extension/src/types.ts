@@ -17,10 +17,12 @@ export interface DownloadCookie {
 }
 
 export interface DownloadRequest {
-  command: 'add'
+  command: 'open'
   url: string
   referrer?: string
   filename?: string
+  mime?: string
+  totalBytes?: number
   headers: Record<string, string>
   cookies: DownloadCookie[]
 }
@@ -111,10 +113,12 @@ export function buildDownloadPayload(
   if (referrer) headers['Referer'] = referrer
 
   return {
-    command: 'add',
+    command: 'open',
     url: item.url,
     referrer,
     filename: baseNameOf(item.filename || '') || undefined,
+    mime: mimeOf(item) || undefined,
+    totalBytes: Math.max(0, item.fileSize || item.totalBytes || 0),
     headers,
     cookies,
   }
