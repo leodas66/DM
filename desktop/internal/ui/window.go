@@ -28,6 +28,7 @@ type window struct {
 	version   string
 	prefs     clientPrefs
 	prefsPath string
+	prefsWarning string
 	css       *gtk.CSSProvider
 	themeButton *gtk.Button
 	sidebar *gtk.Box
