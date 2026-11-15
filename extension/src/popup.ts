@@ -30,7 +30,7 @@ form.addEventListener('submit', async (e) => {
   if (!url) return
 
   sendBtn.disabled = true
-  setStatus('Sending to DM\u2026', true)
+  setStatus('Opening the review dialog in DM\u2026', true)
 
   const item = { url, referrer: '', filename: '', mime: '' } as chrome.downloads.DownloadItem
   const cookies = await collectCookies(url)
