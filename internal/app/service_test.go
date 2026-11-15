@@ -41,7 +41,7 @@ func TestDownloadServiceValidatesAndPreservesTransientCredentials(t *testing.T) 
 
 	got, err := service.Add(context.Background(), manager.AddRequest{
 		URL:      "  https://example.test/file  ",
-		Headers: headers,
+		Headers:  headers,
 		Referrer: referrer,
 	})
 	if err != nil {
