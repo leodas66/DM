@@ -125,8 +125,8 @@ type Settings struct {
 	SaveInterval     string `json:"saveInterval"`
 }
 
-// AddRequest is a new download. Secrets (headers, cookies, referrer) are not
-// exposed by this client: the desktop UI never captures them.
+// AddRequest is a confirmed download. Browser credentials are transient
+// request data; the daemon keeps them in memory and never stores them.
 type AddRequest struct {
 	URL      string            `json:"url"`
 	Filename string            `json:"filename,omitempty"`
