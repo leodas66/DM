@@ -23,9 +23,10 @@ pkgver() {
 
 prepare() {
   cd "${srcdir}/dm"
-  local asset expected bundled_sha commit_sha
+  local asset expected bundled_sha commit_sha bundled_epoch commit_epoch
   asset="dm-linux-${CARCH}.tar.gz"
   commit_sha="$(git rev-parse --short=7 HEAD)"
+  commit_epoch="$(git log -1 --format=%ct)"
 
   # Fetch the rolling assets on every source refresh instead of letting
   # makepkg's SRCDEST cache an old archive under a permanent filename.
@@ -45,12 +46,13 @@ prepare() {
   }
 
   bundled_sha="$(tar -xOzf "${srcdir}/$asset" BUILD_INFO | awk -F= '$1 == "SHORT_SHA" {print $2}')"
-  [[ "$bundled_sha" == "$commit_sha" ]] || {
+  bundled_epoch="$(tar -xOzf "${srcdir}/$asset" BUILD_INFO | awk -F= '$1 == "COMMIT_EPOCH" {print $2}')"
+  [[ "$bundled_sha" == "$commit_sha" && "$bundled_epoch" == "$commit_epoch" ]] || {
     error "The continuous release does not match the latest main commit yet; retry after its build completes."
     return 1
   }
 }
 
 package() {
-  tar -xzf "${srcdir}/dm-linux-${CARCH}.tar.gz" -C "$pkgdir"
+  tar -xzf "${srcdir}/dm-linux-${CARCH}.tar.gz" -C "$pkgdir" usr
 }
