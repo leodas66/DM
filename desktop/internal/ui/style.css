@@ -48,7 +48,7 @@ window.dm-root .dm-nav-heading {
 }
 
 window.dm-root list.navigation-sidebar {
-  background: transparent;
+  background-color: transparent;
 }
 
 window.dm-root list.navigation-sidebar row.dm-nav-row {
@@ -209,6 +209,27 @@ window.dm-root scrollbar slider {
   border-radius: 999px;
   min-width: 6px;
   min-height: 6px;
+}
+
+window.dm-root .dm-sidebar.dm-sidebar-rail .dm-brand {
+  justify-content: center;
+  padding-left: 4px;
+  padding-right: 4px;
+}
+
+window.dm-root .dm-sidebar.dm-sidebar-rail list.navigation-sidebar row.dm-nav-row {
+  padding-left: 0;
+  padding-right: 0;
+}
+
+window.dm-root .dm-inspector-wide {
+  border-left: 1px solid @dm_line_soft;
+}
+
+window.dm-root .dm-inspector-sheet {
+  border-left: none;
+  border-top: 1px solid @dm_line;
+  background-color: @dm_window;
 }
 
 window.dm-root.dm-compact .dm-download-row {
