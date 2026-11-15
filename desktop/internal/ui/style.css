@@ -133,6 +133,69 @@ window.dm-root button.suggested-action:hover {
   background-color: @dm_accent_hover;
 }
 
+window.dm-root .dm-table-header {
+  border-bottom: 1px solid @dm_line_soft;
+  background-color: @dm_window;
+  padding-bottom: 6px;
+}
+
+window.dm-root .dm-table-heading {
+  color: @dm_subtle;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.7px;
+}
+
+window.dm-root .dm-download-row {
+  min-height: 64px;
+  padding-top: 4px;
+  padding-bottom: 4px;
+}
+
+window.dm-root .dm-file-icon {
+  color: @dm_muted;
+}
+
+window.dm-root .dm-file-name {
+  color: @dm_text;
+  font-size: 13px;
+  font-weight: 650;
+}
+
+window.dm-root .dm-file-context {
+  color: @dm_subtle;
+  font-size: 11px;
+}
+
+window.dm-root .dm-progress-status {
+  color: @dm_text;
+  font-size: 11px;
+  font-weight: 650;
+}
+
+window.dm-root .dm-progress-bytes {
+  color: @dm_subtle;
+  font-size: 10px;
+}
+
+window.dm-root .dm-table-value {
+  color: @dm_muted;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+window.dm-root progressbar.dm-row-progress trough {
+  min-height: 5px;
+  border-radius: 3px;
+  background-color: @dm_track;
+}
+
+window.dm-root progressbar.dm-row-progress progress {
+  min-height: 5px;
+  border-radius: 3px;
+  background-color: @dm_ok;
+}
+
 window.dm-root .dm-download-row {
   background-color: transparent;
   border-bottom: 1px solid @dm_line_soft;
