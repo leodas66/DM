@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	"github.com/diamondburned/gotk4/pkg/gtk/v4"
-	"github.com/diamondburned/gotk4/pkg/pango"
 	"github.com/vishwa/dm/desktop/internal/dmapi"
 	"github.com/vishwa/dm/desktop/internal/format"
 	"github.com/vishwa/dm/internal/model"
@@ -209,6 +208,22 @@ func tableValueLabel(width int, align gtk.Align) *gtk.Label {
 	label.SetHAlign(align)
 	label.SetVAlign(gtk.AlignCenter)
 	label.AddCSSClass("dm-table-value")
+	return label
+}
+
+func tableHeaderLabel(text string, width int, expand bool) *gtk.Label {
+	label := newEllipsizedLabel(text)
+	label.SetSizeRequest(width, -1)
+	label.SetHAlign(gtk.AlignStart)
+	label.SetVAlign(gtk.AlignCenter)
+	label.AddCSSClass("dm-table-heading")
+	if text == "Size" || text == "Speed" || text == "Left" || text == "Actions" {
+		label.SetXAlign(1)
+		label.SetHAlign(gtk.AlignEnd)
+	}
+	if expand {
+		label.SetHExpand(true)
+	}
 	return label
 }
 
