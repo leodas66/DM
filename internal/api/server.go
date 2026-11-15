@@ -93,8 +93,8 @@ type Server struct {
 	settings  *app.SettingsService
 	lifecycle app.Lifecycle
 	token     string
-	ln    net.Listener
-	srv   http.Server
+	ln        net.Listener
+	srv       http.Server
 
 	mu      sync.Mutex
 	origins map[string]bool
