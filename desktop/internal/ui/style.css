@@ -1,0 +1,217 @@
+/* Shared GTK4 styling for the DM v3 surface. Palette values live only in palette-*.css. */
+window.dm-root {
+  background-color: @dm_bg;
+  color: @dm_text;
+}
+
+window.dm-root headerbar.dm-header,
+window.dm-root headerbar {
+  background-color: @dm_window;
+  color: @dm_text;
+  border-bottom: 1px solid @dm_line_soft;
+  box-shadow: none;
+  min-height: 48px;
+}
+
+window.dm-root .dm-sidebar {
+  background-color: @dm_sidebar;
+  border-right: 1px solid @dm_line_soft;
+}
+
+window.dm-root .dm-brand {
+  padding: 16px 12px 18px;
+}
+
+window.dm-root .dm-brand-mark {
+  background-color: @dm_accent_soft;
+  color: @dm_accent;
+  border-radius: 9px;
+  padding: 7px;
+}
+
+window.dm-root .dm-brand-name {
+  color: @dm_text;
+  font-size: 16px;
+  font-weight: 760;
+}
+
+window.dm-root .dm-brand-version,
+window.dm-root .dm-nav-heading,
+window.dm-root .dm-caption {
+  color: @dm_subtle;
+  font-size: 11px;
+}
+
+window.dm-root .dm-nav-heading {
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+
+window.dm-root list.navigation-sidebar {
+  background: transparent;
+}
+
+window.dm-root list.navigation-sidebar row.dm-nav-row {
+  color: @dm_muted;
+  border-radius: 7px;
+  min-height: 38px;
+  margin: 1px 6px;
+  padding: 0 7px;
+}
+
+window.dm-root list.navigation-sidebar row.dm-nav-row:hover {
+  background-color: @dm_hover;
+  color: @dm_text;
+}
+
+window.dm-root list.navigation-sidebar row.dm-nav-row:selected {
+  background-color: @dm_surface2;
+  color: @dm_text;
+  font-weight: 650;
+}
+
+window.dm-root .dm-nav-count {
+  color: @dm_subtle;
+  font-size: 12px;
+}
+
+window.dm-root .dm-network-card {
+  background-color: @dm_window;
+  border: 1px solid @dm_line_soft;
+  border-radius: 8px;
+  padding: 11px 12px;
+}
+
+window.dm-root .dm-network-speed {
+  color: @dm_text;
+  font-size: 20px;
+  font-weight: 700;
+}
+
+window.dm-root .dm-page-title {
+  color: @dm_text;
+  font-size: 24px;
+  font-weight: 720;
+}
+
+window.dm-root .dm-page-meta {
+  color: @dm_muted;
+  font-size: 12px;
+}
+
+window.dm-root .dm-toolbar {
+  background-color: @dm_window;
+  border-bottom: 1px solid @dm_line_soft;
+  padding: 6px 10px;
+}
+
+window.dm-root entry {
+  color: @dm_text;
+  background-color: @dm_surface;
+  border: 1px solid @dm_line;
+  border-radius: 8px;
+  min-height: 34px;
+}
+
+window.dm-root entry:focus {
+  border-color: @dm_accent;
+  box-shadow: 0 0 0 2px @dm_accent_soft;
+}
+
+window.dm-root button {
+  border-radius: 7px;
+}
+
+window.dm-root button.suggested-action {
+  background-color: @dm_accent;
+  color: @dm_accent_ink;
+  border-color: @dm_accent;
+  font-weight: 650;
+}
+
+window.dm-root button.suggested-action:hover {
+  background-color: @dm_accent_hover;
+}
+
+window.dm-root .dm-download-row {
+  background-color: transparent;
+  border-bottom: 1px solid @dm_line_soft;
+}
+
+window.dm-root .dm-download-row:hover {
+  background-color: @dm_hover;
+}
+
+window.dm-root progressbar trough {
+  min-height: 5px;
+  border-radius: 3px;
+  background-color: @dm_track;
+}
+
+window.dm-root progressbar progress {
+  border-radius: 3px;
+  background-color: @dm_ok;
+}
+
+window.dm-root .dm-inspector {
+  background-color: @dm_window;
+  border-left: 1px solid @dm_line_soft;
+}
+
+window.dm-root .dm-inspector .heading,
+window.dm-root .dm-inspector .title-3 {
+  color: @dm_text;
+}
+
+window.dm-root .dm-empty-title {
+  color: @dm_text;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+window.dm-root .dm-toast {
+  background-color: @dm_surface;
+  color: @dm_text;
+  border: 1px solid @dm_line;
+  border-radius: 9px;
+  padding: 8px 10px;
+}
+
+window.dm-root .dim-label,
+window.dm-root .caption {
+  color: @dm_subtle;
+  opacity: 1;
+}
+
+window.dm-root popover > contents,
+window.dm-root popover.menu > contents {
+  background-color: @dm_surface;
+  color: @dm_text;
+  border: 1px solid @dm_line;
+  border-radius: 8px;
+}
+
+window.dm-root popover button:hover {
+  background-color: @dm_surface2;
+}
+
+window.dm-root tooltip {
+  background-color: @dm_surface2;
+  color: @dm_text;
+}
+
+window.dm-root separator {
+  background-color: @dm_line_soft;
+}
+
+window.dm-root scrollbar slider {
+  background-color: @dm_line;
+  border-radius: 999px;
+  min-width: 6px;
+  min-height: 6px;
+}
+
+window.dm-root.dm-compact .dm-download-row {
+  padding-top: 3px;
+  padding-bottom: 3px;
+}
