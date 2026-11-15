@@ -13,7 +13,8 @@ import (
 
 func (w *window) buildInspector() *gtk.Box {
 	panel := gtk.NewBox(gtk.OrientationVertical, 10)
-	panel.SetSizeRequest(292, -1)
+	panel.AddCSSClass("dm-inspector")
+	panel.SetSizeRequest(336, -1)
 	panel.SetMarginTop(14)
 	panel.SetMarginBottom(14)
 	panel.SetMarginStart(14)
