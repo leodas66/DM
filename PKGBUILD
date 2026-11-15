@@ -30,11 +30,23 @@ prepare() {
 
   # Fetch the rolling assets on every source refresh instead of letting
   # makepkg's SRCDEST cache an old archive under a permanent filename.
-  curl -fsSL "https://github.com/leodas66/DM/releases/download/continuous/$asset" \
+  # Keep curl's progress visible: makepkg otherwise looks frozen while the
+  # silent download runs inside prepare().
+  msg2 "Downloading the $CARCH release bundle ($asset)..."
+  curl --fail --location --show-error --progress-bar \
+    --retry 3 --retry-delay 2 --retry-all-errors \
+    --connect-timeout 20 --max-time 300 \
+    "https://github.com/leodas66/DM/releases/download/continuous/$asset" \
     -o "${srcdir}/$asset"
-  curl -fsSL "https://github.com/leodas66/DM/releases/download/continuous/SHA256SUMS" \
+
+  msg2 "Downloading release checksums..."
+  curl --fail --location --show-error --progress-bar \
+    --retry 3 --retry-delay 2 --retry-all-errors \
+    --connect-timeout 20 --max-time 120 \
+    "https://github.com/leodas66/DM/releases/download/continuous/SHA256SUMS" \
     -o "${srcdir}/SHA256SUMS"
 
+  msg2 "Checking the release checksum..."
   expected="$(awk -v asset="$asset" '$2 == asset {print $1}' "${srcdir}/SHA256SUMS")"
   [[ "$expected" =~ ^[[:xdigit:]]{64}$ ]] || {
     error "No valid checksum found for $asset in SHA256SUMS"
@@ -45,6 +57,7 @@ prepare() {
     return 1
   }
 
+  msg2 "Checking that the bundle matches the checked-out main commit..."
   bundled_sha="$(tar -xOzf "${srcdir}/$asset" BUILD_INFO | awk -F= '$1 == "SHORT_SHA" {print $2}')"
   bundled_epoch="$(tar -xOzf "${srcdir}/$asset" BUILD_INFO | awk -F= '$1 == "COMMIT_EPOCH" {print $2}')"
   [[ "$bundled_sha" == "$commit_sha" && "$bundled_epoch" == "$commit_epoch" ]] || {
