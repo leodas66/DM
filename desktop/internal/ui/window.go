@@ -42,6 +42,7 @@ type window struct {
 	layoutWide     bool
 	connectFn      func() (*dmapi.Client, error)
 	win            *gtk.ApplicationWindow
+
 	ctx    context.Context
 	cancel context.CancelFunc
 
