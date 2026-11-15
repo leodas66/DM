@@ -16,20 +16,20 @@ type row struct {
 	w    *window
 	root *gtk.Box
 
-	fileCell     *gtk.Box
-	fileIcon     *gtk.Image
-	title        *gtk.Label
-	context      *gtk.Label
-	progressCell *gtk.Box
-	progressTop  *gtk.Box
-	icon         *gtk.Image
-	status       *gtk.Label
-	spinner      *gtk.Spinner
-	progress     *gtk.ProgressBar
+	fileCell      *gtk.Box
+	fileIcon      *gtk.Image
+	title         *gtk.Label
+	context       *gtk.Label
+	progressCell  *gtk.Box
+	progressTop   *gtk.Box
+	icon          *gtk.Image
+	status        *gtk.Label
+	spinner       *gtk.Spinner
+	progress      *gtk.ProgressBar
 	progressBytes *gtk.Label
-	sizeLabel    *gtk.Label
-	speedLabel   *gtk.Label
-	etaLabel     *gtk.Label
+	sizeLabel     *gtk.Label
+	speedLabel    *gtk.Label
+	etaLabel      *gtk.Label
 
 	actionCell *gtk.Box
 	pause      *gtk.Button
