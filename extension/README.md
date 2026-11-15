@@ -1,9 +1,9 @@
 # dm browser extension
 
-A Manifest V3 WebExtension (Chrome and Firefox) that sends browser downloads to
-the local [dm](../) daemon through a Native Messaging host. The extension holds
-no port and no bearer token: the host finds the daemon through its runtime
-endpoint file and reads the token itself.
+A Manifest V3 WebExtension (Chrome and Firefox) that routes browser downloads
+through a Native Messaging host into the native GTK desktop app. The app shows
+a review dialog before the request is submitted to the local [dm](../) daemon.
+The extension holds no port and no bearer token.
 
 ## What it does
 
