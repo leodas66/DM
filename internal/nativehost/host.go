@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -23,7 +24,7 @@ import (
 // app to show a review dialog; "add" remains available to trusted CLI clients
 // that intentionally want to queue a download immediately.
 type Request struct {
-	// Command is "add" (queue a download) or "ping" (is the daemon there?).
+	// Command is "open" (show the desktop review dialog), "add" (queue directly), or "ping".
 	Command string `json:"command"`
 
 	URL        string            `json:"url,omitempty"`
@@ -121,6 +122,9 @@ func (h *Host) open(ctx context.Context, req Request) Response {
 		TotalBytes: req.TotalBytes,
 		Headers:    cleanHeaders(req.Headers),
 		Cookies:    cleanCookies(req.Cookies),
+	}
+	if err := uihandoff.Validate(browserRequest); err != nil {
+		return failure(err.Error())
 	}
 	if err := h.OpenUI(ctx, browserRequest); err != nil {
 		return failure("Could not open the DM download review dialog: " + err.Error())
