@@ -134,15 +134,15 @@ func (w *window) applyAppearance() {
 	}
 
 	if w.themeButton != nil {
+		iconName, label := "weather-clear-night-symbolic", "Switch to dark appearance"
 		if paletteIsDark(w.currentPalette()) {
-			w.themeButton.SetIconName("weather-clear-symbolic")
-			w.themeButton.SetTooltipText("Switch to light appearance")
-			setAccessibleLabel(w.themeButton.Accessible, "Switch to light appearance")
-		} else {
-			w.themeButton.SetIconName("weather-clear-night-symbolic")
-			w.themeButton.SetTooltipText("Switch to dark appearance")
-			setAccessibleLabel(w.themeButton.Accessible, "Switch to dark appearance")
+			iconName, label = "weather-clear-symbolic", "Switch to light appearance"
 		}
+		icon := gtk.NewImageFromIconName(iconName)
+		icon.SetPixelSize(16)
+		w.themeButton.SetChild(icon)
+		w.themeButton.SetTooltipText(label)
+		setAccessibleLabel(w.themeButton.Accessible, label)
 	}
 }
 
