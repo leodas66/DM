@@ -28,6 +28,7 @@ type row struct {
 	menu      *gtk.MenuButton
 	popover   *gtk.Popover
 
+	detailsItem *gtk.Button
 	cancelItem *gtk.Button
 	openItem   *gtk.Button
 	removeItem *gtk.Button
@@ -131,13 +132,18 @@ func newRow(w *window) *row {
 	menuBox.SetMarginStart(6)
 	menuBox.SetMarginEnd(6)
 
+	r.detailsItem = newMenuItem("Show details")
 	r.cancelItem = newMenuItem("Cancel")
 	r.openItem = newMenuItem("Open File")
 	r.removeItem = newMenuItem("Remove from List")
 	r.deleteItem = newMenuItem("Delete File\u2026")
-	for _, item := range []*gtk.Button{r.cancelItem, r.openItem, r.removeItem, r.deleteItem} {
+	for _, item := range []*gtk.Button{r.detailsItem, r.cancelItem, r.openItem, r.removeItem, r.deleteItem} {
 		menuBox.Append(item)
 	}
+	r.detailsItem.ConnectClicked(func() {
+		r.popover.Popdown()
+		r.w.showDetails(r.id)
+	})
 	r.popover.SetChild(menuBox)
 	r.menu.SetPopover(r.popover)
 

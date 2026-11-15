@@ -37,6 +37,28 @@ type window struct {
 	categories  []model.Category
 	defaultDir  string
 	settings    dmapi.Settings
+	sortMode    sortMode
+	searchEntry *gtk.Entry
+	pauseAllButton *gtk.Button
+	resumeAllButton *gtk.Button
+	clearCompletedButton *gtk.Button
+	networkActiveLabel *gtk.Label
+	networkSpeedLabel *gtk.Label
+	selectedID string
+	inspectorRevealer *gtk.Revealer
+	inspectorTitle *gtk.Label
+	inspectorHost *gtk.Label
+	inspectorStatus *gtk.Label
+	inspectorProgress *gtk.ProgressBar
+	inspectorStats *gtk.Label
+	inspectorSource *gtk.Label
+	inspectorDestination *gtk.Label
+	inspectorSegments *gtk.Label
+	inspectorPrimary *gtk.Button
+	inspectorCancel *gtk.Button
+	inspectorOpen *gtk.Button
+	inspectorRemove *gtk.Button
+	inspectorDelete *gtk.Button
 	addDialog   *addDialog
 	prefsDialog *preferencesDialog
 	catsDialog  *categoriesDialog
@@ -155,6 +177,13 @@ func (w *window) build() {
 	// window title; the WM title still names the window.
 	header.SetTitleWidget(gtk.NewBox(gtk.OrientationHorizontal, 0))
 
+	w.searchEntry = gtk.NewEntry()
+	w.searchEntry.SetPlaceholderText("Search downloads")
+	w.searchEntry.SetSizeRequest(190, -1)
+	w.searchEntry.SetTooltipText("Search filenames and download sources")
+	w.searchEntry.ConnectChanged(func() { w.rebuild() })
+	header.PackEnd(w.searchEntry)
+
 	addButton := gtk.NewButtonWithLabel("Add Download")
 	addButton.AddCSSClass("suggested-action")
 	addButton.ConnectClicked(func() { w.showAddDialog() })
@@ -195,7 +224,19 @@ func (w *window) build() {
 	mainArea.SetHExpand(true)
 	mainArea.SetVExpand(true)
 	mainArea.Append(w.buildBanner())
-	mainArea.Append(w.buildStack())
+	mainArea.Append(w.buildToolbar())
+
+	body := gtk.NewBox(gtk.OrientationHorizontal, 0)
+	body.SetHExpand(true)
+	body.SetVExpand(true)
+	body.Append(w.buildStack())
+	w.inspectorRevealer = gtk.NewRevealer()
+	w.inspectorRevealer.SetTransitionType(gtk.RevealerTransitionTypeSlideLeft)
+	w.inspectorRevealer.SetTransitionDuration(150)
+	w.inspectorRevealer.SetChild(w.buildInspector())
+	w.inspectorRevealer.SetRevealChild(false)
+	body.Append(w.inspectorRevealer)
+	mainArea.Append(body)
 	mainArea.Append(w.buildToast())
 	content.Append(mainArea)
 
@@ -224,6 +265,13 @@ func (w *window) build() {
 	controller.AddShortcut(gtk.NewShortcut(
 		gtk.NewShortcutTriggerParseString("<Control>comma"),
 		gtk.NewNamedAction("win.preferences"),
+	))
+	searchAction := gio.NewSimpleAction("search", nil)
+	searchAction.ConnectActivate(func(*glib.Variant) { w.searchEntry.GrabFocus() })
+	w.win.AddAction(searchAction)
+	controller.AddShortcut(gtk.NewShortcut(
+		gtk.NewShortcutTriggerParseString("/"),
+		gtk.NewNamedAction("win.search"),
 	))
 	w.win.AddController(controller)
 
@@ -306,6 +354,20 @@ func (w *window) buildSidebar() *gtk.Box {
 
 	scroll.SetChild(inner)
 	box.Append(scroll)
+
+	network := gtk.NewBox(gtk.OrientationVertical, 3)
+	network.SetMarginTop(10)
+	network.SetMarginBottom(12)
+	network.SetMarginStart(14)
+	network.SetMarginEnd(14)
+	network.Append(sectionHeading("Network"))
+	w.networkActiveLabel = newDimLabel("0 active")
+	w.networkSpeedLabel = newLabel("0.0 MiB/s")
+	w.networkSpeedLabel.AddCSSClass("title-3")
+	network.Append(w.networkActiveLabel)
+	network.Append(w.networkSpeedLabel)
+	box.Append(gtk.NewSeparator(gtk.OrientationHorizontal))
+	box.Append(network)
 
 	w.filterList.ConnectRowSelected(func(row *gtk.ListBoxRow) {
 		if row == nil || w.updatingSelection {
@@ -783,12 +845,14 @@ func (w *window) flushRows() {
 		}
 		delete(w.dirty, id)
 	}
+	w.updateNetworkSummary()
+	w.refreshInspector()
 }
 
 // ---- list and sidebar state ----
 
 func (w *window) rebuild() {
-	ids := w.store.ids(w.filter)
+	ids := w.visibleIDs()
 	w.model.Splice(0, w.model.NItems(), ids)
 
 	w.updateCounts()
@@ -813,6 +877,7 @@ func (w *window) updateCounts() {
 		cr.count.SetLabel(strconv.Itoa(w.store.countCategory(cr.filter.categoryID)))
 	}
 	w.updateHeaderSummary(counts)
+	w.updateBulkSensitivity(counts)
 }
 
 // updateHeaderSummary keeps the one-line subtitle under the view title honest:
