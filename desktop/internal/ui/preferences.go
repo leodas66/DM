@@ -90,6 +90,8 @@ type preferencesDialog struct {
 	globalLimitSpin *gtk.SpinButton
 	perDownloadSpin *gtk.SpinButton
 	appearanceDrop  *gtk.DropDown
+	colorSchemeDrop *gtk.DropDown
+	accentEntry     *gtk.Entry
 	densityDrop     *gtk.DropDown
 	errorBox        *gtk.Box
 	errorLabel      *gtk.Label
@@ -128,7 +130,32 @@ func newPreferencesDialog(w *window) *preferencesDialog {
 	content.Append(sectionHeading("Appearance"))
 	d.appearanceDrop = gtk.NewDropDownFromStrings([]string{"Follow system", "Dark", "Light"})
 	d.appearanceDrop.SetSelected(themeChoiceIndex(w.prefs.Theme))
-	content.Append(dropdownRow("_Appearance", d.appearanceDrop, "Controls DM's palette without changing your desktop theme."))
+	content.Append(dropdownRow("_Appearance", d.appearanceDrop, "Controls DM's light or dark surfaces without changing your desktop theme."))
+
+	d.colorSchemeDrop = gtk.NewDropDownFromStrings(colorSchemeOptions)
+	d.colorSchemeDrop.SetSelected(colorSchemeChoiceIndex(w.prefs.ColorScheme))
+	content.Append(dropdownRow("_Color scheme", d.colorSchemeDrop, "Choose a complete semantic palette for DM. This never changes your system GTK theme."))
+
+	d.accentEntry = gtk.NewEntry()
+	d.accentEntry.SetText(w.prefs.AccentColor)
+	d.accentEntry.SetPlaceholderText("Use palette default")
+	d.accentEntry.SetHExpand(true)
+	accentBox := gtk.NewBox(gtk.OrientationVertical, 4)
+	accentBox.Append(labelToControl("_Accent color", d.accentEntry, d.accentEntry.Accessible))
+	accentRow := gtk.NewBox(gtk.OrientationHorizontal, 8)
+	accentRow.Append(d.accentEntry)
+	applyAccent := gtk.NewButtonWithLabel("Apply")
+	applyAccent.ConnectClicked(func() { d.applyAccent() })
+	accentRow.Append(applyAccent)
+	resetAccent := gtk.NewButtonWithLabel("Reset")
+	resetAccent.ConnectClicked(func() { d.resetAccent() })
+	accentRow.Append(resetAccent)
+	accentBox.Append(accentRow)
+	accentHelp := newDimLabel("Enter a six-digit HEX color such as #D97757. Leave it blank to use the selected palette's accent.")
+	accentHelp.AddCSSClass("caption")
+	accentHelp.SetWrap(true)
+	accentBox.Append(accentHelp)
+	content.Append(accentBox)
 
 	d.densityDrop = gtk.NewDropDownFromStrings([]string{"Comfortable", "Compact"})
 	d.densityDrop.SetSelected(densityChoiceIndex(w.prefs.Density))
@@ -186,6 +213,7 @@ func newPreferencesDialog(w *window) *preferencesDialog {
 	content.Append(d.errorBox)
 
 	d.appearanceDrop.NotifyProperty("selected", d.persistAppearance)
+	d.colorSchemeDrop.NotifyProperty("selected", d.persistAppearance)
 	d.densityDrop.NotifyProperty("selected", d.persistAppearance)
 
 	// Large text or a small screen must not clip the form: the dialog caps its
@@ -247,6 +275,7 @@ func (d *preferencesDialog) persistAppearance() {
 	} else {
 		prefs.Density = densityComfortable
 	}
+	prefs.ColorScheme = colorSchemeFromIndex(d.colorSchemeDrop.Selected())
 	if err := d.w.setClientPrefs(prefs); err != nil {
 		d.showError("Appearance changed but could not be saved: " + err.Error())
 		return
@@ -254,6 +283,34 @@ func (d *preferencesDialog) persistAppearance() {
 	if d.errorBox != nil {
 		d.errorBox.SetVisible(false)
 	}
+}
+
+func (d *preferencesDialog) applyAccent() {
+	raw := strings.TrimSpace(d.accentEntry.Text())
+	accent := ""
+	if raw != "" {
+		normalized, ok := normalizeHexColor(raw)
+		if !ok {
+			d.showError("Enter a six-digit HEX color such as #D97757.")
+			return
+		}
+		accent = normalized
+	}
+	prefs := d.w.prefs
+	prefs.ColorScheme = colorSchemeFromIndex(d.colorSchemeDrop.Selected())
+	prefs.AccentColor = accent
+	if err := d.w.setClientPrefs(prefs); err != nil {
+		d.showError("Accent color changed but could not be saved: " + err.Error())
+		return
+	}
+	if d.errorBox != nil {
+		d.errorBox.SetVisible(false)
+	}
+}
+
+func (d *preferencesDialog) resetAccent() {
+	d.accentEntry.SetText("")
+	d.applyAccent()
 }
 
 func dropdownRow(label string, control *gtk.DropDown, help string) *gtk.Box {
