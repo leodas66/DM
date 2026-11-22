@@ -70,6 +70,39 @@ func TestBuildStylesheetRejectsUnknownPalette(t *testing.T) {
 	}
 }
 
+func TestHighContrastPalettesKeepTextAndAccentReadable(t *testing.T) {
+	schemes := []colorScheme{
+		colorSchemeDM,
+		colorSchemeCatppuccin,
+		colorSchemeNord,
+		colorSchemeGruvbox,
+		colorSchemeKanagawa,
+	}
+	for _, scheme := range schemes {
+		for _, palette := range []string{"dark-hc", "light-hc"} {
+			t.Run(string(scheme)+"/"+palette, func(t *testing.T) {
+				css, err := buildStylesheetForPrefs(clientPrefs{ColorScheme: scheme}, palette)
+				if err != nil {
+					t.Fatal(err)
+				}
+				background := definedColor(t, css, "dm_bg")
+				textColor := definedColor(t, css, "dm_text")
+				accent := definedColor(t, css, "dm_accent")
+				accentInk := definedColor(t, css, "dm_accent_ink")
+				if got := contrastRatio(textColor, background); got < 4.5 {
+					t.Errorf("text/background contrast = %.2f, want at least 4.5:1", got)
+				}
+				if got := contrastRatio(accent, background); got < 4.5 {
+					t.Errorf("accent/background contrast = %.2f, want at least 4.5:1", got)
+				}
+				if got := contrastRatio(accentInk, accent); got < 4.5 {
+					t.Errorf("accent ink/accent contrast = %.2f, want at least 4.5:1", got)
+				}
+			})
+		}
+	}
+}
+
 func TestBuildStylesheetRejectsUnknownColorScheme(t *testing.T) {
 	if _, err := buildStylesheetForPrefs(clientPrefs{ColorScheme: "unknown"}, "dark"); err == nil {
 		t.Fatal("expected an error for unknown color scheme")

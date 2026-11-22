@@ -82,11 +82,19 @@ func buildStylesheetForPrefs(prefs clientPrefs, palette string) (string, error) 
 	if highContrast && scheme != colorSchemeDM {
 		colorCSS = setDefineColors(colorCSS, highContrastColors(paletteIsDark(palette)))
 	}
+	accent := ""
 	if prefs.AccentColor != "" {
-		accent, ok := normalizeHexColor(prefs.AccentColor)
+		normalized, ok := normalizeHexColor(prefs.AccentColor)
 		if !ok {
 			return "", fmt.Errorf("invalid accent color %q: expected #RRGGBB", prefs.AccentColor)
 		}
+		accent = normalized
+	} else if highContrast {
+		// Strengthen the scheme's own accent in high-contrast mode too; a
+		// custom accent is not required for accessible action controls.
+		accent = definedColorValue(colorCSS, "dm_accent")
+	}
+	if accent != "" {
 		background := definedColorValue(colorCSS, "dm_bg")
 		overrides, err := accentColorDefinitions(accent, background, highContrast)
 		if err != nil {
