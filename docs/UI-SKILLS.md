@@ -23,9 +23,9 @@ Start with dm-ui-router. Usually load only one skill; use no more than three for
 
 docs/GTK4-DESIGN-SPEC.md is authoritative. In particular:
 - GTK4 is the toolkit; gotk4 is the approved Go binding.
-- The user's GTK theme, system appearance, fonts, and accessibility preferences own the visual style.
+- DM's selected semantic color scheme is scoped to the app. The host GTK theme still owns native widget behavior, fonts, focus conventions and platform integration; DM never changes global GTK or desktop settings.
 - KDE Plasma and Wayland are first-class test targets; GNOME remains supported.
-- No app-owned palette, global CSS skin, forced theme, Libadwaita dependency, or Qt dependency.
+- Keep the app-owned palette limited to the semantic tokens in the approved GTK4 design spec. Do not force a host GTK theme, change system settings, add a theme engine, or introduce Libadwaita or Qt.
 - The daemon remains the sole owner of download state.
 
 The skills do not authorize new dependencies, changes to project architecture, or work outside the requested phase. Follow AGENTS.md and PROCESS.md.

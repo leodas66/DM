@@ -12,8 +12,8 @@ Use for GTK4 desktop UI implementation or a focused visual cleanup.
 DM is a native GTK application. Read docs/GTK4-DESIGN-SPEC.md before changing UI. Use standard GTK4 widgets and the approved gotk4 bindings. Do not build a web-style design system inside GTK.
 
 - Prefer standard GTK controls, layout containers, dialogs, menus, list views, and native focus/selection behavior.
-- Inherit the active GTK theme, system light/dark preference, system fonts, text scaling, and accessibility settings.
-- Do not ship app-owned light/dark palettes, accent colors, typography scales, global CSS skins, custom widget replacements, or forced corner radii.
+- Use DM's user-selected semantic color scheme and optional accent override only inside the app's scoped CSS provider. The host GTK theme continues to own native widget behavior, system fonts, text scaling, and accessibility settings.
+- Do not modify global GTK or desktop settings, force a host theme, add a theme engine, or replace native widgets. Keep palette values in semantic token files and shared layout rules in style.css.
 - Avoid Libadwaita APIs unless separately approved. GNOME HIG is guidance, not a runtime dependency.
 - Never imitate Qt or require Qt libraries. GTK is expected to run on KDE Plasma too.
 - Use symbolic GTK icons where appropriate. Give icon-only controls accessible names and tooltips.
@@ -25,7 +25,7 @@ DM is a native GTK application. Read docs/GTK4-DESIGN-SPEC.md before changing UI
 
 ## CSS exception policy
 
-Custom GTK CSS is exceptional. First try standard widget properties, layout, and theme behavior. Add only narrowly scoped CSS for a demonstrated GTK limitation that cannot be solved natively. Explain the limitation and verify the workaround against at least two GTK themes and light/dark appearance. Never reset or reskin the whole app.
+DM's scoped semantic palette CSS is an approved part of the v3 visual system. Keep color overrides in palette token files and shared component rules in style.css; widget Go files must not hard-code colors. Beyond that contract, custom GTK CSS remains exceptional: prefer standard widget properties and native controls, and never change global GTK settings or broadly reset platform behavior.
 
 ## KDE and Wayland
 

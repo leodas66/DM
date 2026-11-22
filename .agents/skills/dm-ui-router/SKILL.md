@@ -32,4 +32,4 @@ Read the GTK4 spec and relevant existing implementation. Preserve the daemon/cli
 
 ## Platform target
 
-GTK4 is the toolkit. KDE Plasma (including Wayland on Arch Linux) and GNOME are supported hosts. Inherit the user's GTK theme and system appearance; never impose a branded palette or force Breeze. Test desktop portal/file chooser behavior on KDE. Do not require GNOME Shell or GNOME-only services.
+GTK4 is the toolkit. KDE Plasma (including Wayland on Arch Linux) and GNOME are supported hosts. Use the app-scoped semantic palette selected in DM preferences; keep native widget behavior, fonts and platform integration from the host GTK theme. Read system appearance only for Follow system, and never modify global GTK or desktop settings or force Breeze. Test desktop portal/file chooser behavior on KDE. Do not require GNOME Shell or GNOME-only services.
