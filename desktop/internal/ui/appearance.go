@@ -241,8 +241,8 @@ func accentColorDefinitions(accent, background string, highContrast bool) (map[s
 	}
 	accent = ensureContrast(accent, background, minimum)
 	accentRGB, _ := parseHexColor(accent)
-	ink := "#111111"
-	if contrastRatio("#FFFFFF", accent) >= contrastRatio("#111111", accent) {
+	ink := "#000000"
+	if contrastRatio("#FFFFFF", accent) >= contrastRatio("#000000", accent) {
 		ink = "#FFFFFF"
 	}
 	hoverTarget := rgbColor{}
