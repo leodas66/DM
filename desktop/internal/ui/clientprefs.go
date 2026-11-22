@@ -7,8 +7,6 @@ import (
 	"path/filepath"
 )
 
-// themeChoice is the desktop client's appearance preference. It is deliberately
-// local to the GTK client and is never sent to the daemon.
 type themeChoice string
 
 const (
@@ -24,13 +22,29 @@ const (
 	densityCompact     densityChoice = "compact"
 )
 
+type colorScheme string
+
+const (
+	colorSchemeDM         colorScheme = "dm"
+	colorSchemeCatppuccin colorScheme = "catppuccin"
+	colorSchemeNord       colorScheme = "nord"
+	colorSchemeGruvbox    colorScheme = "gruvbox"
+	colorSchemeKanagawa   colorScheme = "kanagawa"
+)
+
+var colorSchemeOptions = []string{
+	"DM · Amber", "Catppuccin", "Nord", "Gruvbox", "Kanagawa",
+}
+
 type clientPrefs struct {
-	Theme   themeChoice   `json:"theme"`
-	Density densityChoice `json:"density"`
+	Theme       themeChoice   `json:"theme"`
+	Density     densityChoice `json:"density"`
+	ColorScheme colorScheme   `json:"color_scheme"`
+	AccentColor string        `json:"accent_color,omitempty"`
 }
 
 func defaultClientPrefs() clientPrefs {
-	return clientPrefs{Theme: themeSystem, Density: densityComfortable}
+	return clientPrefs{Theme: themeSystem, Density: densityComfortable, ColorScheme: colorSchemeDM}
 }
 
 func normalizeClientPrefs(p clientPrefs) clientPrefs {
@@ -44,7 +58,49 @@ func normalizeClientPrefs(p clientPrefs) clientPrefs {
 	default:
 		p.Density = densityComfortable
 	}
+	switch p.ColorScheme {
+	case colorSchemeDM, colorSchemeCatppuccin, colorSchemeNord, colorSchemeGruvbox, colorSchemeKanagawa:
+	default:
+		p.ColorScheme = colorSchemeDM
+	}
+	if p.AccentColor != "" {
+		if normalized, ok := normalizeHexColor(p.AccentColor); ok {
+			p.AccentColor = normalized
+		} else {
+			p.AccentColor = ""
+		}
+	}
 	return p
+}
+
+func colorSchemeChoiceIndex(choice colorScheme) uint {
+	switch choice {
+	case colorSchemeCatppuccin:
+		return 1
+	case colorSchemeNord:
+		return 2
+	case colorSchemeGruvbox:
+		return 3
+	case colorSchemeKanagawa:
+		return 4
+	default:
+		return 0
+	}
+}
+
+func colorSchemeFromIndex(index uint) colorScheme {
+	switch index {
+	case 1:
+		return colorSchemeCatppuccin
+	case 2:
+		return colorSchemeNord
+	case 3:
+		return colorSchemeGruvbox
+	case 4:
+		return colorSchemeKanagawa
+	default:
+		return colorSchemeDM
+	}
 }
 
 // clientPrefsPath keeps desktop-only preferences beside the user's DM config,
@@ -86,14 +142,12 @@ func saveClientPrefs(path string, prefs clientPrefs) error {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return fmt.Errorf("create desktop config directory: %w", err)
 	}
-
 	tmp, err := os.CreateTemp(dir, ".desktop-*.tmp")
 	if err != nil {
 		return fmt.Errorf("create temporary preferences file: %w", err)
 	}
 	tmpName := tmp.Name()
 	defer os.Remove(tmpName)
-
 	if err := tmp.Chmod(0o600); err != nil {
 		_ = tmp.Close()
 		return fmt.Errorf("secure temporary preferences file: %w", err)

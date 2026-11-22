@@ -20,7 +20,7 @@ DM remains a native GTK4 application. The approved v3 direction changes the visu
 
 - Use standard GTK4 widgets, list models, menus, dialogs, focus behavior and accessibility semantics. Do not embed the HTML prototype or introduce a WebView, React, Electron, Libadwaita, Qt or another UI toolkit.
 - Translate the v3 reference into GTK-native widget composition. The target is the visual hierarchy, information density, palette, and responsive behavior—not a literal port of browser DOM or CSS.
-- DM owns its application palette: dark, light, dark high-contrast and light high-contrast variants. The user can choose Follow system, Dark or Light; Follow system is the default. The application palette does not modify global GTK or desktop settings.
+- DM owns an application-scoped semantic palette: dark, light, dark high-contrast and light high-contrast variants. The user can choose Follow system, Dark or Light; Follow system is the default. Color schemes include DM Amber, Catppuccin, Nord, Gruvbox and Kanagawa, with an optional custom HEX accent override. These preferences affect only DM's scoped CSS provider; they never change the host GTK theme or desktop settings.
 - Centralize all colors in desktop/internal/ui/palette-*.css and all shared widget/layout rules in desktop/internal/ui/style.css. Widget Go files must not contain raw color values. Palette variants must define the same named colors.
 - Use the system font stack; prefer Inter when installed, with Noto Sans, Cantarell and the system UI font as fallbacks. Do not bundle a font. Text scaling remains governed by GTK.
 - Comfortable and Compact row densities are application preferences, saved locally by the desktop client and never sent to the daemon.
@@ -35,7 +35,7 @@ DM remains a native GTK4 application. The approved v3 direction changes the visu
 
 ### 2.2 Token and appearance boundaries
 
-- All four palettes define the same semantic tokens: background, window, sidebar, surface, raised surface, hover, separators, text, muted text, subtle text, accent, accent foreground, accent hover, success, warning, danger, selection and progress track.
+- Every palette defines the same semantic tokens: background, window, sidebar, surface, raised surface, hover, separators, text, muted text, subtle text, accent, accent foreground, accent hover, success, warning, danger, selection and progress track. Each named scheme has composed light and dark variants; system high-contrast mode strengthens text, borders and focus contrast without discarding the selected scheme.
 - The dark palette follows the prototype's charcoal surfaces and warm amber accent. The light palette is a true light counterpart rather than an inverted dark palette.
 - High-contrast variants increase text, border and focus contrast; state must never be communicated by color alone.
 - The GTK theme may still provide platform behavior and fallback rendering, but it must not replace DM's authored semantic palette.
@@ -123,6 +123,8 @@ Preferences contain two distinct groups.
 ### Appearance (desktop-local)
 
 - Appearance: Follow system, Dark or Light. Follow system is the default.
+- Color scheme: DM Amber, Catppuccin, Nord, Gruvbox or Kanagawa.
+- Accent color: optional six-digit HEX override; blank uses the selected scheme's accent. Derived foreground and interaction colors retain accessible contrast.
 - List density: Comfortable or Compact.
 - Changes apply immediately and are saved in the desktop client's local desktop.json preferences file under the user's DM configuration directory. These values are never sent to the daemon.
 - If the local preference file is missing, use defaults. If it is malformed, keep defaults and report a recoverable error; writes must be atomic and use owner-only file permissions.
@@ -182,7 +184,7 @@ Before calling the v3 UI complete, verify:
 
 - The workspace follows the v3 hierarchy at 1280×820 and remains usable at 1180, 1024, 900 and 700 px.
 - The inspector is a right pane at 1440 px and above, and a bottom sheet below that breakpoint.
-- Dark, light and both high-contrast palettes render without undefined tokens or CSS parsing warnings.
+- Dark, light and both high-contrast variants render for all five schemes without undefined tokens or CSS parsing warnings; custom accents retain readable foreground and focus contrast.
 - Text and controls meet contrast requirements in each palette; state remains understandable without color.
 - Comfortable and Compact density preferences survive restart and do not alter daemon settings.
 - The list remains virtualized and all displayed progress, speed, ETA and segment information comes from daemon data.

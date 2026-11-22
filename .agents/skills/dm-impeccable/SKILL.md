@@ -15,7 +15,7 @@ Score each 0–4 and support the score with concrete evidence. If source or runt
 
 1. **Accessibility:** accessible names, keyboard reachability, focus order, Orca output, large text, high contrast, reduced motion.
 2. **Runtime performance:** startup work, virtualized download list, GTK main-thread responsiveness, image/file metadata work, unnecessary redraws, goroutine-to-main-context updates.
-3. **Appearance and theming:** active GTK theme, light/dark preference, system fonts, high contrast, absence of forced palette and broad CSS overrides.
+3. **Appearance and theming:** selected DM semantic palette and accent, light/dark preference, system fonts, high contrast, contrast-safe tokens, and no forced host GTK theme or global settings changes.
 4. **GTK/platform conformance:** standard GTK controls, native dialogs and menus, expected keyboard behavior, no web-shaped controls, no GNOME-only service dependency.
 5. **Adaptivity:** useful layout at 1024×600 and narrower sizes, no clipped controls, navigation adapts while retaining essential actions.
 

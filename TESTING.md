@@ -126,7 +126,9 @@ existing 0600 token. Screenshots were taken of each state.
 | Narrow window | sidebar collapses below 820 px, restores when widened | pass — 720 px hid it, 1024 px restored it, manual toggle overrides | 2026-11-14 |
 | Failed row | human-readable reason, raw error available | partial — short reason and error icon verified; the tooltip was not opened | 2026-11-14 |
 | Keyboard | Ctrl+N opens Add Download, Escape dismisses dialogs | pass | 2026-11-14 |
-| Light and dark appearance | readable in both without app colors | partial — verified under Breeze dark only | 2026-11-14 |
+| Light and dark appearance | readable in both without app colors | superseded by the app-scoped palettes in D040/D042; live check required for each selected scheme | — |
+| Color schemes | DM Amber, Catppuccin, Nord, Gruvbox and Kanagawa render in light, dark and system high-contrast modes | not run — automated token/contrast tests cover stylesheet generation; live GTK render remains required | — |
+| Custom accent | valid HEX applies immediately; invalid HEX is rejected; reset restores selected scheme default | not run — requires a live GTK preferences session | — |
 | Confirm delete actually removes | file gone, row gone, daemon state updated | not run — the confirmation was opened but not confirmed | — |
 | Preferences dialog | opens from the app menu, shows stored values, rejects an empty folder inline, saving closes it and updates the daemon | pass — menu action opened it; save applied dir/concurrency/connections/limits and preserved `minSegmentSize`/`saveInterval` | 2026-11-14 |
 | Settings persistence | settings survive a daemon restart | pass — `PUT` then `SIGTERM`/restart returned the same record | 2026-11-14 |
@@ -160,6 +162,7 @@ Record any check skipped, with the reason and the phase it was moved to.
 | GTK4 | Orca and GTK Inspector accessibility pass | Needs a full screen-reader session; labels and roles are implemented but not audited with Orca |
 | GTK4 | High-contrast and large-text appearance | Needs a separate GTK theme/settings session; no clipping was observed under the default font |
 | GTK4 | Light appearance | Only Breeze dark was available during the live check |
+| GTK4 | All five color schemes and custom accent on KDE Plasma Wayland | Needs a live GTK session on the target host; automated stylesheet and contrast tests do not prove visual fidelity |
 | GTK4 | Confirm delete end-to-end | Destructive check on seeded files; the confirmation flow was rendered but not confirmed |
 | 6 | `makepkg -si` installs daemon, client, unit, desktop entry, icon | `makepkg`/`pacman` are unavailable here; `bash -n PKGBUILD`, `desktop-file-validate`, and the source tag were checked instead |
 | 6 | `dm --serve` opens no browser and prints no token | needs a fresh terminal run after installing the package |
